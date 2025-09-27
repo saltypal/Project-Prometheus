@@ -1,3 +1,4 @@
+import pprint
 from collections import deque
 
 """
@@ -31,10 +32,8 @@ And every element we pop from the queue will be put into a function.
 
     def __init__(self, fileName):
         self.fileName = fileName
-        self.read_file()
+        self.data = self.read_file()
 
-    def crc(data):
-        return chr(data)
 
     def read_file(self):
         print("Reading the file.... ")
@@ -49,18 +48,23 @@ And every element we pop from the queue will be put into a function.
             print(f"Error Reading: {e}")
 
 
-    def bendiString(data, len):
+    def bendiString(self, data):
         """
-         4: spam represents the string "spam"
-
+        4:spam represents the string "spam"
         """
-        data.popleft # we are poopping ':'
-        n = 0
-        str = b''
-        while len != n:
-            str += bytes([data.popleft()])
-            n+=1
-        return str
+        # Read length until ':'
+        length_bytes = b''
+        while data and chr(data[0]) != ':':
+            length_bytes += bytes([data.popleft()])
+        
+        data.popleft()  # Remove ':'
+        length = int(length_bytes)
+        
+        # Read the string data
+        result = b''
+        for _ in range(length):
+            result += bytes([data.popleft()])
+        return result
         
     def bendiList(self,data):
         """
@@ -68,23 +72,24 @@ And every element we pop from the queue will be put into a function.
         Example: le represents an empty list: []        
 
         """
+        data.popleft()  # Remove 'l'
         blist = []
-        while data[0]!=ord('e'):
-            len = data.popleft()
-            blist.append(self.bendiString(data,len))
+        while data and chr(data[0]) != 'e':
+            blist.append(self.decode(data))  
+        data.popleft()  # Remove 'e'
         return blist
     
-    def bendiIntegers(data):
+    def bendiIntegers(self,data):
         """ 
         Example: i3e represents the integer "3"
         Example: i-3e represents the integer "-3"
         """
-        str = b''
-        while data[0]!=ord('e'):
-            str += bytes([data.popleft()])
-        
-        data.popleft() # to remove e
-        return int(str)
+        data.popleft()  # Remove 'i'
+        num_str = b''
+        while data and chr(data[0]) != 'e':
+            num_str += bytes([data.popleft()])
+        data.popleft()  # Remove 'e'
+        return int(num_str.decode('ascii'))
         
     def bendiDictionaries(self,data):
         """
@@ -93,48 +98,87 @@ And every element we pop from the queue will be put into a function.
         Example: d9:publisher3:bob17:publisher-webpage15:www.example.com18:publisher.location4:homee represents { "publisher" => "bob", "publisher-webpage" => "www.example.com", "publisher.location" => "home" }
         Example: de represents an empty dictionary {}
         """
-        dict = {}
-        while data[0]!=ord('e'):
-            # first word
-            len1 = data.popleft()
-            word1=self.bendiString(data,len1)
-            len2 = data.popleft()
-            word2 = self.bendiString(data,len2)
-            dict[word1] = word2
-            
-        return dict
+        data.popleft()  # Remove 'd'
+        result = {}
+        while data and chr(data[0]) != 'e':
+            key = self.decode(data)    
+            value = self.decode(data)  
+            result[key] = value
+        data.popleft()  # Remove 'e'
+        return result
     
+    def decode(self, data):
+        """
+        Main recursive decode method
+        """
+        if not data:
+            raise ValueError("Unexpected end of data")
+        
+        char = chr(data[0])
+        if char.isdigit():
+            return self.bendiString(data)
+        elif char == 'i':
+            return self.bendiIntegers(data)
+        elif char == 'l':
+            return self.bendiList(data)
+        elif char == 'd':
+            return self.bendiDictionaries(data)
+        else:
+            raise ValueError(f"Invalid bencode start: {char}")
 
     def deBencode_list(self):
-        data = self.read_file()
-        data.append('~')
+        """
+        Decode the entire torrent file
+        """
+        result = self.decode(self.data)
+        if self.data:  # Should be empty after successful decode
+            raise ValueError("Extra data after decoding")
+        return result
 
-        global_list = [] # here is where we add everything.
+    # def deBencode_list(self):
+    #     data = self.read_file()
+    #     data.append('~')
 
-        while data:
-            #So, while my data queue is there, i will pop my first element.
+    #     global_list = [] # here is where we add everything.
 
-            character = chr(data.popleft()) # because everything is in binary, i will need to make it into character.
+    #     while data:
+    #         #So, while my data queue is there, i will pop my first element.
 
-            if character.isdigit(): # If the character is digit, then the upcoming is a String
-                len = character # the length of the String.
-                global_list.append(self.bendiString(data, len)) #making next 'len' elements into string and appending to  global_list
+    #         character = chr(data.popleft()) # because everything is in binary, i will need to make it into character.
+
+    #         if character.isdigit(): # If the character is digit, then the upcoming is a String
+    #             len = character # the length of the String.
+    #             global_list.append(self.bendiString(data, len)) #making next 'len' elements into string and appending to  global_list
             
             
-            elif character == 'i': # this means it is a string
-                    global_list.append(self.bendiIntegers(data)) # appending the integers into the global_list
+    #         elif character == 'i': # this means it is a string
+    #                 global_list.append(self.bendiIntegers(data)) # appending the integers into the global_list
             
-            elif character == 'l': # this means it is a list
-                    global_list.append(self.bendiList(data))
-            elif character == 'd':
-                    global_list.append(self.bendiDictionaries(data)) # dictioaries can be appended too.
-            elif character =='~':
-                    return global_list.reverse()
-        if len(global_list) != 1:
-            raise ValueError("Bencode decoding failed. Final stack state is not a single item.")
+    #         elif character == 'l': # this means it is a list
+    #                 global_list.append(self.bendiList(data))
+    #         elif character == 'd':
+    #                 global_list.append(self.bendiDictionaries(data)) # dictioaries can be appended too.
+    #         elif character =='~':
+    #                 return global_list.reverse()
+    #     if len(global_list) != 1:
+    #         raise ValueError("Bencode decoding failed. Final stack state is not a single item.")
 
 if __name__ == '__main__':
-    test = 'test.torrent'
-    obj = benDecoder(test)
-    decoded = obj.deBencode_list()
-    print(decoded)
+    # IMPORTANT: Change this path to your test torrent file
+    torrent_file_path = 'test.torrent' 
+    
+    # This block now handles errors gracefully.
+    try:
+        decoder = benDecoder(torrent_file_path)
+        decoded_data = decoder.deBencode_list()
+        
+        if decoded_data:
+            print("\n--- DECODING SUCCESSFUL ---")
+            with open('decoded.txt','w') as writer:
+                writer.write(pprint.pformat(decoded_data))
+
+    except (ValueError, TypeError, IndexError) as e:
+        print(f"\n--- DECODING FAILED ---")
+        print(f"An error occurred during decoding: {e}")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
