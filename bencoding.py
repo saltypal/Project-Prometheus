@@ -16,7 +16,17 @@ SUPER ULTRA IMPORTANT NOTEEEEEEE:
 SECOND IMPORTANT NOTE:
          if you see any ai code or any other implementation of bencoder, you will see a different logic.
          this uses queue logic so yeah. dont assume this is ultra fast either, it isnt. you also know that. but yeah as long as it works, it works.
+THIRDLY: 
+         File >>> (Read in binary mode rb) >>> Single bytes object.
+
+         Bencoded bytes object >>> (Bencoding parser) >>> Python dictionary with bytes and int values.
+
+         Specific bytes values >>> (.decode('utf-8')) >>> Human-readable str values.
+
+         so yeah this whole decode utf-8 code is ai :thumbsup:
+
          
+
 This python file deals with bencoding. Bencoding is a way to specify and organize data in a terse format. 
 It supports the following types: byte strings, integers, lists, and dictionaries.
 
@@ -61,7 +71,7 @@ And every element we pop from the queue will be put into a function.
 
 
     def bendiString(self, data):
-        print("string")
+        # print("string")
         """
         4:spam represents the string "spam"
         """
@@ -80,7 +90,7 @@ And every element we pop from the queue will be put into a function.
         return result
         
     def bendiList(self,data):
-        print("list")
+        # print("list")
         """
         Example: l4:spam4:eggse represents the list of two strings: [ "spam", "eggs" ]
         Example: le represents an empty list: []        
@@ -94,7 +104,7 @@ And every element we pop from the queue will be put into a function.
         return blist
     
     def bendiIntegers(self,data):
-        print("integer")
+        # print("integer")
         """ 
         Example: i3e represents the integer "3"
         Example: i-3e represents the integer "-3"
@@ -104,10 +114,10 @@ And every element we pop from the queue will be put into a function.
         while data and chr(data[0]) != 'e':
             num_str += bytes([data.popleft()]) # Pop and append.
         data.popleft()  # Remove 'e'
-        return int(num_str.decode('ascii'))
+        return int(num_str.decode('ascii')) 
         
     def bendiDictionaries(self,data):
-        print("dictionary")
+        # print("dictionary")
         """
         Example: d3:cow3:moo4:spam4:eggse represents the dictionary { "cow" => "moo", "spam" => "eggs" }
         Example: d4:spaml1:a1:bee represents the dictionary { "spam" => [ "a", "b" ] }
@@ -152,11 +162,32 @@ And every element we pop from the queue will be put into a function.
             raise ValueError("\nExtra data after decoding")
         return result
 
+    def _clean_output(self, data):
+        """
+        Recursively traverses the data structure and decodes byte strings to
+        UTF-8 strings where possible. Leaves binary data as bytes.
+        """
+        if isinstance(data, bytes):
+            try:
+                return data.decode('utf-8')
+            except UnicodeDecodeError:
+                return data  # This is binary data, leave it as bytes
+        elif isinstance(data, list):
+            return [self._clean_output(item) for item in data]
+        elif isinstance(data, dict):
+            return {
+                self._clean_output(key): self._clean_output(value)
+                for key, value in data.items()
+            }
+        else:
+            return data # It's an int, return as is
+
     def write_to_file(self, result):
         if result:
             print("\nDecoding is done. Congratulations ma.")
-            with open('torrentData','w') as writer:
-                writer.write(pprint.pformat(result))
+            cleaned_result = self._clean_output(result)
+            with open('torrentData','w', encoding='utf-8') as writer:
+                writer.write(pprint.pformat(cleaned_result))
         else: print("\nsorry boss nothing to print only. empty shit.")
    
 if __name__ == '__main__':
@@ -168,7 +199,6 @@ if __name__ == '__main__':
         benDecoder = benDecode(torrent_file_path)
         benDecoded_data = benDecoder.deBencode_list()
         benDecoder.write_to_file(benDecoded_data)
-
     except Exception as e:
         print(f"\nerrorrrrrrrr {e}")
 
