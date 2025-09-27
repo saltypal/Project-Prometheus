@@ -4,7 +4,19 @@ from collections import deque
 """
 
 MADE BY SATYA PALADUGU AT 27/9/2025 9:40 AM
-
+SUPER ULTRA IMPORTANT NOTEEEEEEE:
+         We will not maintain any while loop or make it a recursive call within this benDecode() function.
+         in general, the torrentfile doesnt have integers or strings sitting alone and all
+         what happens is, the torrent file is always made up of dictionaries and lists. 
+         which means, recursion should happen within the main fucntions of the dictionary and list functions only.
+         benDecide fucntion is just the classifier and claling of the function needed for that decoding
+         I HOPE IT IS CLEAR. 
+         MORE CAN BE READ HERE: https://wiki.theory.org/BitTorrentSpecification#Scope
+        
+SECOND IMPORTANT NOTE:
+         if you see any ai code or any other implementation of bencoder, you will see a different logic.
+         this uses queue logic so yeah. dont assume this is ultra fast either, it isnt. you also know that. but yeah as long as it works, it works.
+         
 This python file deals with bencoding. Bencoding is a way to specify and organize data in a terse format. 
 It supports the following types: byte strings, integers, lists, and dictionaries.
 
@@ -17,10 +29,10 @@ Lists are encoded as follows: l<bencoded values>e
 Dictionaries are encoded as follows: d<bencoded string><bencoded element>e
 """
 
-class benDecoder:
+class benDecode:
     """
 
-This class contains the methods to decode a bencoded string.
+This class contains the methods to benDecode a bencoded string.
     
 We will push the whole thing into a queue.
 
@@ -49,10 +61,11 @@ And every element we pop from the queue will be put into a function.
 
 
     def bendiString(self, data):
+        print("string")
         """
         4:spam represents the string "spam"
         """
-        # Read length until ':'
+        # Read length until ':'                                    why until :?? because the string can be more than one digit also
         length_bytes = b''
         while data and chr(data[0]) != ':':
             length_bytes += bytes([data.popleft()])
@@ -63,10 +76,11 @@ And every element we pop from the queue will be put into a function.
         # Read the string data
         result = b''
         for _ in range(length):
-            result += bytes([data.popleft()])
+            result += bytes([data.popleft()])  # Pop and append that
         return result
         
     def bendiList(self,data):
+        print("list")
         """
         Example: l4:spam4:eggse represents the list of two strings: [ "spam", "eggs" ]
         Example: le represents an empty list: []        
@@ -75,11 +89,12 @@ And every element we pop from the queue will be put into a function.
         data.popleft()  # Remove 'l'
         blist = []
         while data and chr(data[0]) != 'e':
-            blist.append(self.decode(data))  
+            blist.append(self.benDecode(data))  
         data.popleft()  # Remove 'e'
         return blist
     
     def bendiIntegers(self,data):
+        print("integer")
         """ 
         Example: i3e represents the integer "3"
         Example: i-3e represents the integer "-3"
@@ -87,11 +102,12 @@ And every element we pop from the queue will be put into a function.
         data.popleft()  # Remove 'i'
         num_str = b''
         while data and chr(data[0]) != 'e':
-            num_str += bytes([data.popleft()])
+            num_str += bytes([data.popleft()]) # Pop and append.
         data.popleft()  # Remove 'e'
         return int(num_str.decode('ascii'))
         
     def bendiDictionaries(self,data):
+        print("dictionary")
         """
         Example: d3:cow3:moo4:spam4:eggse represents the dictionary { "cow" => "moo", "spam" => "eggs" }
         Example: d4:spaml1:a1:bee represents the dictionary { "spam" => [ "a", "b" ] }
@@ -101,20 +117,21 @@ And every element we pop from the queue will be put into a function.
         data.popleft()  # Remove 'd'
         result = {}
         while data and chr(data[0]) != 'e':
-            key = self.decode(data)    
-            value = self.decode(data)  
+            key = self.benDecode(data)    # word one
+            value = self.benDecode(data)  # word two
             result[key] = value
         data.popleft()  # Remove 'e'
         return result
     
-    def decode(self, data):
+    def benDecode(self, data):
         """
-        Main recursive decode method
+        Main recursive benDecode method
+
         """
         if not data:
-            raise ValueError("Unexpected end of data")
+            raise ValueError("\nwhat ra this? Data didnt end properly. Missing ")
         
-        char = chr(data[0])
+        char = chr(data[0]) # I wont pop the first character from the queue. But i will just check it.
         if char.isdigit():
             return self.bendiString(data)
         elif char == 'i':
@@ -124,18 +141,47 @@ And every element we pop from the queue will be put into a function.
         elif char == 'd':
             return self.bendiDictionaries(data)
         else:
-            raise ValueError(f"Invalid bencode start: {char}")
+            raise ValueError(f"\nWrong bencoding start not valid format. what ra you. what u did here? :{char}")
 
     def deBencode_list(self):
         """
-        Decode the entire torrent file
+        benDecode the entire torrent file
         """
-        result = self.decode(self.data)
-        if self.data:  # Should be empty after successful decode
-            raise ValueError("Extra data after decoding")
+        result = self.benDecode(self.data)
+        if self.data:  # Should be empty after successful benDecode
+            raise ValueError("\nExtra data after decoding")
         return result
 
-    # def deBencode_list(self):
+    def write_to_file(self, result):
+        if result:
+            print("\nDecoding is done. Congratulations ma.")
+            with open('torrentData','w') as writer:
+                writer.write(pprint.pformat(result))
+        else: print("\nsorry boss nothing to print only. empty shit.")
+   
+if __name__ == '__main__':
+    # IMPORTANT: Change this path to your test torrent file
+    torrent_file_path = 'test.torrent' 
+    
+    # This block now handles errors gracefully.
+    try:
+        benDecoder = benDecode(torrent_file_path)
+        benDecoded_data = benDecoder.deBencode_list()
+        benDecoder.write_to_file(benDecoded_data)
+
+    except Exception as e:
+        print(f"\nerrorrrrrrrr {e}")
+
+
+# ppprint
+# It improves the readability of data, especially 
+# for nested lists, dictionaries, and other complex 
+# objects, by adding indentation and line breaks to
+# make the structure clear. This is particularly useful 
+# when dealing with API responses, large JSON files, 
+# or intricate data structures during debugging.
+
+ # def deBencode_list(self):
     #     data = self.read_file()
     #     data.append('~')
 
@@ -162,23 +208,3 @@ And every element we pop from the queue will be put into a function.
     #                 return global_list.reverse()
     #     if len(global_list) != 1:
     #         raise ValueError("Bencode decoding failed. Final stack state is not a single item.")
-
-if __name__ == '__main__':
-    # IMPORTANT: Change this path to your test torrent file
-    torrent_file_path = 'test.torrent' 
-    
-    # This block now handles errors gracefully.
-    try:
-        decoder = benDecoder(torrent_file_path)
-        decoded_data = decoder.deBencode_list()
-        
-        if decoded_data:
-            print("\n--- DECODING SUCCESSFUL ---")
-            with open('decoded.txt','w') as writer:
-                writer.write(pprint.pformat(decoded_data))
-
-    except (ValueError, TypeError, IndexError) as e:
-        print(f"\n--- DECODING FAILED ---")
-        print(f"An error occurred during decoding: {e}")
-    except Exception as e:
-        print(f"\nAn unexpected error occurred: {e}")
