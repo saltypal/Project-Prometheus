@@ -42,18 +42,20 @@ Dictionaries are encoded as follows: d<bencoded string><bencoded element>e
 class benDecode:
     """
 
-This class contains the methods to benDecode a bencoded string.
-    
-We will push the whole thing into a queue.
+        This class contains the methods to benDecode a bencoded string.
+            
+        We will push the whole thing into a queue.
 
-As we keep going, we keep popping from left of the queue.
+        As we keep going, we keep popping from left of the queue.
 
-And every element we pop from the queue will be put into a function.
+        And every element we pop from the queue will be put into a function.
     
     """
 
     def __init__(self, fileName):
         self.fileName = fileName
+        self.decoded_file = self.fileName[:-8]
+
         self.data = self.read_file()
 
 
@@ -151,7 +153,7 @@ And every element we pop from the queue will be put into a function.
         elif char == 'd':
             return self.bendiDictionaries(data)
         else:
-            raise ValueError(f"\nWrong bencoding start not valid format. what ra you. what u did here? :{char}")
+            raise ValueError(f"\nWrong bencoding start not valid format. what man this?what u did here? :{char}")
 
     def deBencode_list(self):
         """
@@ -183,24 +185,20 @@ And every element we pop from the queue will be put into a function.
             return data # It's an int, return as is
 
     def write_to_file(self, result):
+        """
+        This function not only writes the decoded data into a file,  but also returns the name of the file.
+        """
+    
         if result:
             print("\nDecoding is done. Congratulations ma.")
             cleaned_result = self._clean_output(result)
-            with open('torrentData','w', encoding='utf-8') as writer:
+            with open(self.decoded_file,'w', encoding='utf-8') as writer:
                 writer.write(pprint.pformat(cleaned_result))
+                return benDecode.decoded_file
+
         else: print("\nsorry boss nothing to print only. empty shit.")
    
-if __name__ == '__main__':
-    # IMPORTANT: Change this path to your test torrent file
-    torrent_file_path = 'test.torrent' 
-    
-    # This block now handles errors gracefully.
-    try:
-        benDecoder = benDecode(torrent_file_path)
-        benDecoded_data = benDecoder.deBencode_list()
-        benDecoder.write_to_file(benDecoded_data)
-    except Exception as e:
-        print(f"\nerrorrrrrrrr {e}")
+
 
 
 # ppprint
