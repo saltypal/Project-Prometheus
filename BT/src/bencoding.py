@@ -2,10 +2,9 @@ import pprint
 from collections import deque
 
 """
-
 MADE BY SATYA PALADUGU AT 27/9/2025 9:40 AM
 SUPER ULTRA IMPORTANT NOTEEEEEEE:
-         We will not maintain any while loop or make it a recursive call within this benDecode() function.
+         We will not maintain any while loop or make it a recursive call within this bencodeDecode() function.
          in general, the torrentfile doesnt have integers or strings sitting alone and all
          what happens is, the torrent file is always made up of dictionaries and lists. 
          which means, recursion should happen within the main fucntions of the dictionary and list functions only.
@@ -14,8 +13,9 @@ SUPER ULTRA IMPORTANT NOTEEEEEEE:
          MORE CAN BE READ HERE: https://wiki.theory.org/BitTorrentSpecification#Scope
         
 SECOND IMPORTANT NOTE:
-         if you see any ai code or any other implementation of bencoder, you will see a different logic.
+         if you see any ai code or any other implementation of bencodeDECODER, you will see a different logic.
          this uses queue logic so yeah. dont assume this is ultra fast either, it isnt. you also know that. but yeah as long as it works, it works.
+         BUT THE BENCODER IS AI GENERATED.
 THIRDLY: 
          File >>> (Read in binary mode rb) >>> Single bytes object.
 
@@ -39,10 +39,12 @@ Lists are encoded as follows: l<bencoded values>e
 Dictionaries are encoded as follows: d<bencoded string><bencoded element>e
 """
 
-class benDecode:
+class bencodeDecode:
     """
 
-        This class contains the methods to benDecode a bencoded string.
+        This class contains the methods to Decode a bencoded string.
+
+        The input for this function is queue.
             
         We will push the whole thing into a queue.
 
@@ -51,27 +53,7 @@ class benDecode:
         And every element we pop from the queue will be put into a function.
     
     """
-
-    def __init__(self, fileName):
-        self.fileName = fileName
-        self.decoded_file = self.fileName[:-8]
-
-        self.data = self.read_file()
-
-
-    def read_file(self):
-        print("Reading the file.... ")
-        try:
-            with open(self.fileName, 'rb') as tFile:
-                torrentContent = tFile.read()
-                print("Done queueing the torrent file contents.")
-
-                return deque(torrentContent)
-
-        except Exception as e:
-            print(f"Error Reading: {e}")
-
-
+    
     def bendiString(self, data):
         # print("string")
         """
@@ -101,7 +83,7 @@ class benDecode:
         data.popleft()  # Remove 'l'
         blist = []
         while data and chr(data[0]) != 'e':
-            blist.append(self.benDecode(data))  
+            blist.append(self.bencodeDecode(data))  
         data.popleft()  # Remove 'e'
         return blist
     
@@ -129,15 +111,15 @@ class benDecode:
         data.popleft()  # Remove 'd'
         result = {}
         while data and chr(data[0]) != 'e':
-            key = self.benDecode(data)    # word one
-            value = self.benDecode(data)  # word two
+            key = self.bencodeDecode(data)    # word one
+            value = self.bencodeDecode(data)  # word two
             result[key] = value
         data.popleft()  # Remove 'e'
         return result
     
-    def benDecode(self, data):
+    def bencodeDecode(self, data):
         """
-        Main recursive benDecode method
+        Main recursive bencodeDecode method
 
         """
         if not data:
@@ -155,84 +137,16 @@ class benDecode:
         else:
             raise ValueError(f"\nWrong bencoding start not valid format. what man this?what u did here? :{char}")
 
-    def deBencode_list(self):
+    def deBencode_list(self,data):
+        self.data = data
         """
-        benDecode the entire torrent file
+        bencodeDecode the entire torrent file
         """
-        result = self.benDecode(self.data)
-        if self.data:  # Should be empty after successful benDecode
+        result = self.bencodeDecode(self.data)
+        if self.data:  # Should be empty after successful bencodeDecode
             raise ValueError("\nExtra data after decoding")
         return result
 
-    def _clean_output(self, data):
-        """
-        Recursively traverses the data structure and decodes byte strings to
-        UTF-8 strings where possible. Leaves binary data as bytes.
-        """
-        if isinstance(data, bytes):
-            try:
-                return data.decode('utf-8')
-            except UnicodeDecodeError:
-                return data  # This is binary data, leave it as bytes
-        elif isinstance(data, list):
-            return [self._clean_output(item) for item in data]
-        elif isinstance(data, dict):
-            return {
-                self._clean_output(key): self._clean_output(value)
-                for key, value in data.items()
-            }
-        else:
-            return data # It's an int, return as is
+  
+class bencodeEncode:
 
-    def write_to_file(self, result):
-        """
-        This function not only writes the decoded data into a file,  but also returns the name of the file.
-        """
-    
-        if result:
-            print("\nDecoding is done. Congratulations ma.")
-            cleaned_result = self._clean_output(result)
-            with open(self.decoded_file,'w', encoding='utf-8') as writer:
-                writer.write(pprint.pformat(cleaned_result))
-                return benDecode.decoded_file
-
-        else: print("\nsorry boss nothing to print only. empty shit.")
-   
-
-
-
-# ppprint
-# It improves the readability of data, especially 
-# for nested lists, dictionaries, and other complex 
-# objects, by adding indentation and line breaks to
-# make the structure clear. This is particularly useful 
-# when dealing with API responses, large JSON files, 
-# or intricate data structures during debugging.
-
- # def deBencode_list(self):
-    #     data = self.read_file()
-    #     data.append('~')
-
-    #     global_list = [] # here is where we add everything.
-
-    #     while data:
-    #         #So, while my data queue is there, i will pop my first element.
-
-    #         character = chr(data.popleft()) # because everything is in binary, i will need to make it into character.
-
-    #         if character.isdigit(): # If the character is digit, then the upcoming is a String
-    #             len = character # the length of the String.
-    #             global_list.append(self.bendiString(data, len)) #making next 'len' elements into string and appending to  global_list
-            
-            
-    #         elif character == 'i': # this means it is a string
-    #                 global_list.append(self.bendiIntegers(data)) # appending the integers into the global_list
-            
-    #         elif character == 'l': # this means it is a list
-    #                 global_list.append(self.bendiList(data))
-    #         elif character == 'd':
-    #                 global_list.append(self.bendiDictionaries(data)) # dictioaries can be appended too.
-    #         elif character =='~':
-    #                 return global_list.reverse()
-    #     if len(global_list) != 1:
-    #         raise ValueError("Bencode decoding failed. Final stack state is not a single item.")
