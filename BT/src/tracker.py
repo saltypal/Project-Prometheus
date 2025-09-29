@@ -1,6 +1,7 @@
+
 """
 
-MADE BY SATYA PALADUGU AT 28/9/2025 2:40 PM
+MADE BY SATYA PALADUGU AT 28/9/2025 11:40 PM
 
         
 This file deals with:
@@ -26,5 +27,5 @@ event: This parameter tells the tracker what's happening. The most common events
 
 """
 
-
-
+class Tracker:
+        

@@ -1,28 +1,66 @@
 from client import client_Info
-from bencoding import benDecode
-
+from bencoding import bencodeDecode
+from collections import deque
+import pprint
 class bitTorrent_client:
     def __init__(self):
-        client_metadata = client_Info()
-        sourceFile = self.bendecode_torrent_file()
+     
+    # First we have to initialise the client.
+        client = client_Info()
+        self.peerID = client.generateID()
+        self.portNumber = client.getPortNumber()
+        self.initialise_decoder()
+        print(f"Client Initialized with Peer ID: {self.peerID} on Port: {self.portNumber}")
 
-    def bendecode_torrent_file():
-        """
-        This will load get the benDecoded data. It will also return the name of the file.
-    
-        """
+     
 
+# ----------------------------------------------------------------------------
+    """
+        This block deals with the torrent file loading. 
+        Variables: torrentFilePath: Has path of the torentfile
+                    rawTorrent: has the queued contents of the torrentfile
+                    decodedTorrent: has the decoded content
+    """
+    def return_torrentPath(self):
+        """For this function, it is used to select the torrent path in the ui or whatever and return the path of the torrent file"""
+        self.torrentFilePath = r'BT\sample_torrent\bopbop.torrent'
+
+
+    def load_torrentFile(self):
+        """This function, loads the torrent file and returns the data in a queue"""
         try:
-          
-            benDecoder = benDecode(torrent_file_path)
-            benDecoded_data = benDecoder.deBencode_list()
-            benDecoder.write_to_file(benDecoded_data)
-            # we also need to return the name of the file. like the name of the decoded file.
-        except Exception as e:
-            print(f"\nerrorrrrrrrr {e}")
+            with open(self.torrentFilePath,'rb') as rawTorrent:
+                non_queue_data = rawTorrent.read()
+                self.rawTorrent = deque(non_queue_data)
 
-    def getTorrentFileName():
-        """
-        tis function will return file name and all. it will basically load the file into the working directory of the 
-        
-        """
+        except Exception as e:
+            print(f"Sorry boss, I can't load the torrent file: {e}")
+    
+    def initialise_decoder(self):
+        self.decoder = bencodeDecode()
+
+    def decode_torrentFile(self):
+        self.decodedTorrent = self.decoder.deBencode_list(self.rawTorrent)
+    
+    def write_decoded_to_file(self):
+        try:
+            outputfile_name = self.torrentFilePath[:-8]+".txt"
+            with open(outputfile_name,'w') as decodedtor:
+                decodedtor.write(pprint.pformat(self.decodedTorrent))
+                print(f"Successfully wrote decoded data to {outputfile_name}")
+        except Exception as e:
+            print(f"Couldnt write to file ma: {e}")
+
+# ----------------------------------------------------------------------------
+
+if __name__ == '__main__':  
+    # client object creating
+    f = bitTorrent_client()
+
+    # loading one torrent
+    f.return_torrentPath()
+    f.load_torrentFile()
+    f.decode_torrentFile()
+
+    # writing the torrent decoded content into a file.
+    # f.write_decoded_to_file() t
