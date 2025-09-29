@@ -3,6 +3,7 @@ from collections import deque
 
 """
 MADE BY SATYA PALADUGU AT 27/9/2025 9:40 AM
+LAST MODIFIED: 29/9/2025 11:57AM 
 SUPER ULTRA IMPORTANT NOTEEEEEEE:
          We will not maintain any while loop or make it a recursive call within this bencodeDecode() function.
          in general, the torrentfile doesnt have integers or strings sitting alone and all
@@ -17,13 +18,9 @@ SECOND IMPORTANT NOTE:
          this uses queue logic so yeah. dont assume this is ultra fast either, it isnt. you also know that. but yeah as long as it works, it works.
          BUT THE BENCODER IS AI GENERATED.
 THIRDLY: 
-         File >>> (Read in binary mode rb) >>> Single bytes object.
-
-         Bencoded bytes object >>> (Bencoding parser) >>> Python dictionary with bytes and int values.
-
-         Specific bytes values >>> (.decode('utf-8')) >>> Human-readable str values.
-
-         so yeah this whole decode utf-8 code is ai :thumbsup:
+         yes according to the norm, I have to write an encoder too. BUT SADLY, IM TOO LAZY.
+         so for the part where i have to get hash of the info dict, i am going to do a different way. 
+         check tracker.py
 
          
 
@@ -147,6 +144,6 @@ class bencodeDecode:
             raise ValueError("\nExtra data after decoding")
         return result
 
-  
-class bencodeEncode:
+
+# class bencodeEncode:
 

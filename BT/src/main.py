@@ -2,6 +2,15 @@ from client import client_Info
 from bencoding import bencodeDecode
 from collections import deque
 import pprint
+from tracker import Tracker
+
+"""
+
+MADE BY SATYA PALADUGU AT 28/9/2025 11:40 AM
+LAST MODIFIED: 29/9/2025 11:57AM 
+
+
+"""
 class bitTorrent_client:
     def __init__(self):
      
@@ -30,8 +39,11 @@ class bitTorrent_client:
         """This function, loads the torrent file and returns the data in a queue"""
         try:
             with open(self.torrentFilePath,'rb') as rawTorrent:
-                non_queue_data = rawTorrent.read()
-                self.rawTorrent = deque(non_queue_data)
+                self.rawTorrent = rawTorrent.read()
+                self.rawTorrentDequeue = deque(self.rawTorrent)
+                if self.rawTorrent:
+                    print('Successfully loaded torrent file into bytes and deque.')
+
 
         except Exception as e:
             print(f"Sorry boss, I can't load the torrent file: {e}")
@@ -40,7 +52,7 @@ class bitTorrent_client:
         self.decoder = bencodeDecode()
 
     def decode_torrentFile(self):
-        self.decodedTorrent = self.decoder.deBencode_list(self.rawTorrent)
+        self.decodedTorrent = self.decoder.deBencode_list(self.rawTorrentDequeue)
     
     def write_decoded_to_file(self):
         try:
@@ -52,6 +64,17 @@ class bitTorrent_client:
             print(f"Couldnt write to file ma: {e}")
 
 # ----------------------------------------------------------------------------
+    """
+    This is for the tracker.
+    step 1:  Generating the info_hash for the tracker.
+    step 2: build http request/udp request
+
+    # """
+    def initialise_trackerClass(self):
+        self.Track = Tracker()
+
+    def create_hash_try(self):
+        self.Track.generate_info_hash(self.rawTorrent)
 
 if __name__ == '__main__':  
     # client object creating
@@ -64,3 +87,7 @@ if __name__ == '__main__':
 
     # writing the torrent decoded content into a file.
     # f.write_decoded_to_file() t
+
+    # Tracker shit starts now
+    f.initialise_trackerClass()
+    f.create_hash_try()
