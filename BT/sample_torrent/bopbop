@@ -1,4 +1,5 @@
-{b'announce-list': [[b'udp://tracker.opentrackr.org:1337/announce'],
+{
+    b'announce-list': [[b'udp://tracker.opentrackr.org:1337/announce'],
                     [b'udp://tracker.leechers-paradise.org:6969/announce'],
                     [b'udp://9.rarbg.to:2710/announce'],
                     [b'udp://p4p.arenabg.ch:1337/announce'],
