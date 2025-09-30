@@ -4,15 +4,8 @@ import torrent
 import client
 """
 
-MADE BY SATYA PALADUGU AT 28/9/2025 11:40 PM
-LAST MODIFIED: 29/9/2025 11:57AM 
-
-        
-This file deals with:
-1. info_hash
-2. Request generation for HTTP and UDP trackers.
-3. Response acceptance
-
+MADE BY SATYA PALADUGU AT 30/9/2025 7:55 PM
+LAST MODIFIED: 0/9/2025 7:55 PM
 
 key parameters your client must include in the request:
 info_hash: This is a 20-byte SHA1 hash of the bencoded info dictionary from the torrent file. This hash uniquely identifies the torrent on the netw
