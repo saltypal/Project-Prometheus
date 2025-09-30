@@ -3,8 +3,8 @@ from tracker import Tracker
 from torrent import Torrent
 """
 
-MADE BY SATYA PALADUGU AT 28/9/2025 11:40 AM
-LAST MODIFIED: 29/9/2025 11:57AM 
+MADE BY SATYA PALADUGU AT 30/9/2025 7:55 PM
+LAST MODIFIED: 0/9/2025 7:55 PM
 """
 class bitTorrent_client:
     def __init__(self):
