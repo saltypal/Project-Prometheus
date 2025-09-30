@@ -2,7 +2,7 @@ import random
 """
 MADE BY SATYA PALADUGU AT 28/9/2025 7:40 PM
 
-
+This file deals only with generating A peer ID for a particular Session.
 """
 class client_Info:
     """
@@ -13,7 +13,9 @@ class client_Info:
     """
 
     def __init__(self):
-        self.peerID = self.generateID()
+        self.peerID = self.generateID() 
+        self.portNumber = self.generatePortNumber()
+
 
     def generateID(self):
         """
@@ -32,11 +34,17 @@ class client_Info:
         peerID = clientName+otherBytes
         return peerID
 
-    def getPortNumber(self):
+    def generatePortNumber(self):
         """
             This function is to allocate for use and return a portnumber for the client.
         """
 
-        portNumber = 6881
-        return 6881
+        self.portNumber = 6882
+        return self.portNumber
     
+    # Getters
+    def get_peerID(self):
+        return self.peerID
+
+    def get_portNumber(self)       :
+        return self.portNumber

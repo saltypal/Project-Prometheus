@@ -1,0 +1,220 @@
+from bencoding import bencodeDecode
+from collections import deque
+import pprint
+import hashlib
+
+"""
+MADE BY SATYA PALADUGU AT 30/9/2025 3:40 PM
+LAST MODIFIED: 30/9/2025 3:40 PM
+"""
+
+class Torrent:
+    """
+    This class deals with the torrent content, self.information that has to be retrieved from the torrent.
+    1. Decoded Bencode
+    2. self.InfoHash
+    3. Torrent details
+    4. Tracker List
+    """
+    
+    def __init__(self, torrent_file_path):
+        # Initialise the decoder to decode the bencode.
+        self.decoder = bencodeDecode() 
+        self.torrentFilePath = torrent_file_path
+        # self.rawTorrent = None
+        # self.cleanTorrent = None
+        # self.info_hash = None
+        self.total_size = 0
+        self.announceList = None
+        self.info = None
+        self.load_torrentFile()
+        self.decode_torrentFile()
+        
+    # ----------------------------------------
+    """
+        This block deals with the torrent file loading. 
+        Variables: torrentFilePath: Has path of the torentfile
+                   rawTorrent: has the queued contents of the torrentfile
+                   cleanTorrent: has the decoded content
+    """
+
+    def load_torrentFile(self):
+        """This function, loads the torrent file and returns the data in a queue"""
+        try:
+            with open(self.torrentFilePath,'rb') as rawTorrentFile:
+                self.rawTorrent = rawTorrentFile.read()
+                if self.rawTorrent:
+                    print('Successfully loaded torrent file into bytes.')
+                    return True
+        except Exception as e:
+            print(f"Sorry boss, I can't load the torrent file: {e}")
+            return False
+    
+    def decode_torrentFile(self):
+        """Decodes the raw torrent data. Assumes load_torrentFile has been called."""
+        if not self.rawTorrent:
+            print("Error: Torrent file not loaded. Call load_torrentFile() first.")
+            return False
+        
+        # We pass a copy to the decoder so the original raw data is preserved
+        rawTorrentDequeue = deque(self.rawTorrent)
+        self.cleanTorrent = self.decoder.deBencode_list(rawTorrentDequeue)
+        if self.cleanTorrent:
+            print("Successfully decoded torrent file.")
+            return True
+        return False
+    
+    def write_decoded_to_file(self):
+        """Writes the decoded torrent data to a text file for inspection."""
+        if not self.cleanTorrent:
+            print("Error: No decoded data to write.")
+            return
+
+        try:
+            outputfile_name = self.torrentFilePath + ".txt"
+            with open(outputfile_name,'w', encoding='utf-8') as decodedtor:
+                decodedtor.write(pprint.pformat(self.cleanTorrent))
+                print(f"Successfully wrote decoded data to {outputfile_name}")
+        except Exception as e:
+            print(f"Couldnt write to file ma: {e}")
+
+
+    #----------------------
+    # Get self.info dictionary
+    """
+    self.INFO_HASH generation method:
+                            for generating self.info_hash, i have to make a unique 20-byte SHA1 hash of the bencoded dictionary.
+                            normally, you should bencode back to the ideal bencoded data, and then hash it. 
+                            but this time, we will do something different BECAUSE IM F-ING LAZY.
+                            for this, we will have to pinpoint where the b'self.info' is in the raw file and then take everything after it.
+                            
+    """
+    def generate_hash(self, data):
+        # SHA1 always makes 20Byte hashes
+        # FIX: Added parentheses to call .digest()
+        return hashlib.sha1(data).digest()
+
+    def generate_info_hash(self):
+        """
+        This function is an attempt to create self.info hash without encoding the whole self.info_hash.
+        for this, we will have to pinpoint where the b'self.info' is in the raw file and then take everything after it.
+        """
+        if not self.rawTorrent:
+            print("Error: Raw torrent data not available.")
+            return None
+
+        word = b'4:info'
+        rawData = self.rawTorrent
+        
+        # print("OK Now lets generate info hash using the alt trick.\n Checking where is 4:info.")
+        try:
+            position = rawData.index(word) + len(word)
+            # print("ok i found 4:info. now let's proceed.")
+            print("Valid torrent file.")
+        except ValueError:
+            print("Could not find b'4:info' in torrent data. Is it a valid torrent file?")
+            return None
+
+        temp_data = rawData[position:]
+        level = 0
+        end_offset = 0
+        i = 0
+        
+        # The first character MUST be a 'd' for the self.info dictionary
+        if temp_data[i:i+1] == b'd':
+            level = 1
+            i = 1
+        else:
+            raise ValueError("Corrupt torrent: 'self.info' key not followed by a dictionary.")
+
+        while i < len(temp_data):
+            char = temp_data[i:i+1]
+
+            if char == b'd' or char == b'l':
+                level += 1
+            elif char == b'e':
+                level -= 1
+            elif char in b'0123456789':
+                colon_index = temp_data.find(b':', i)
+                if colon_index == -1: 
+                    raise ValueError("Corrupt torrent: string length not followed by a colon.")
+                
+                # FIX: Correctly convert the length bytes to an integer
+                str_len = int(len(temp_data[i:colon_index]))
+                
+                # Skip the length, the colon, and the string data itself.
+                i += (colon_index - i) + str_len
+            
+            # This check must be after potential index jumps
+            if level == 0:
+                # The end offset is the current position PLUS the final 'e'
+                end_offset = i + 1 
+                break
+            
+            i += 1
+
+        if end_offset == 0:
+            raise ValueError("Could not determine the end of the self.info dictionary.")
+        
+        raw_info_bytes = temp_data[:end_offset]
+        print("Info dictionary has been extracted.")
+        
+        self.info_hash = self.generate_hash(raw_info_bytes)
+        if self.info_hash:
+            print("Info_hash has been generated")
+            print(f"Info_Hash: {self.info_hash.hex()}")
+        return self.info_hash
+
+
+#-----------------------------------------------------
+    """
+    Everything related to calculation of total size
+    """
+    def calculate_total_size(self):
+        """Calculates the total size of the torrent's content."""
+        if not self.cleanTorrent:
+            print("Error: Torrent is not decoded yet.")
+            return 0
+        
+        self.info = self.cleanTorrent.get(b'info') # Getting the info directory of the torrent
+        if not self.info:
+            raise ValueError("Invalid torrent file: 'info' dictionary not found.")
+
+        # FIX: Correctly calculates size for single and multi-file torrents.
+        if b'length' in self.info:
+            # Single file case
+            self.total_size = self.info[b'length']
+        elif b'files' in self.info:
+            # Multi-file case
+            self.total_size = sum(f[b'length'] for f in self.info[b'files'])
+        else:
+            self.total_size = 0
+        
+        print(f"Total torrent size: {self.total_size} bytes")
+        return self.total_size
+
+#-----------------------------------------------------
+    """
+    Pieces related.
+    """
+#-----------------------------------------------------
+    """
+    All getters and setters.s
+    """
+    def getRawTorrent(self):
+        return self.rawTorrent
+    
+    def getCleanTorrent(self):
+        return self.cleanTorrent
+
+    def getInfoHash(self):
+        return self.info_hash
+
+    def getTotalSize(self):
+        return self.total_size
+
+    def getAnnounceList(self):
+        self.announceList = self.cleanTorrent[b'announce']
+        return self.announceList
+    
+#-------------------
