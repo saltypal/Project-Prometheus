@@ -29,7 +29,7 @@ class bitTorrent_client:
     """
         
     def start_torrent(self):   
-        file = r'BT\sample_torrent\manjaro.torrent'
+        file = r'BitTorrentClient\sample_torrent\manjaro.torrent'
 
         # First load the torrent 
         T = Torrent(file)
