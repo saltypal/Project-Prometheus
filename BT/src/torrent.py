@@ -71,7 +71,7 @@ class Torrent:
             return
 
         try:
-            outputfile_name = self.torrentFilePath + ".txt"
+            outputfile_name = self.torrentFilePath[:-8] + ".txt"
             with open(outputfile_name,'w', encoding='utf-8') as decodedtor:
                 decodedtor.write(pprint.pformat(self.cleanTorrent))
                 print(f"Successfully wrote decoded data to {outputfile_name}")
@@ -97,7 +97,6 @@ class Torrent:
     def generate_info_hash(self):
         """
         This function is an attempt to create self.info hash without encoding the whole self.info_hash.
-        for this, we will have to pinpoint where the b'self.info' is in the raw file and then take everything after it.
         """
         if not self.rawTorrent:
             print("Error: Raw torrent data not available.")
@@ -106,65 +105,71 @@ class Torrent:
         word = b'4:info'
         rawData = self.rawTorrent
         
-        # print("OK Now lets generate info hash using the alt trick.\n Checking where is 4:info.")
+        print("OK Now lets generate info hash using the alt trick.")
         try:
             position = rawData.index(word) + len(word)
-            # print("ok i found 4:info. now let's proceed.")
-            print("Valid torrent file.")
+            print("ok i found 4:info. now let's proceed.")
         except ValueError:
-            print("Could not find b'4:info' in torrent data. Is it a valid torrent file?")
-            return None
+            raise ValueError("Invalid Torrent File: Could not find b'4:info' key.")
 
         temp_data = rawData[position:]
         level = 0
         end_offset = 0
         i = 0
         
-        # The first character MUST be a 'd' for the self.info dictionary
         if temp_data[i:i+1] == b'd':
             level = 1
             i = 1
         else:
-            raise ValueError("Corrupt torrent: 'self.info' key not followed by a dictionary.")
+            raise ValueError("Corrupt torrent: 'info' key not followed by a dictionary.")
 
         while i < len(temp_data):
             char = temp_data[i:i+1]
 
             if char == b'd' or char == b'l':
                 level += 1
+                i += 1
             elif char == b'e':
                 level -= 1
+                i += 1
             elif char in b'0123456789':
                 colon_index = temp_data.find(b':', i)
                 if colon_index == -1: 
                     raise ValueError("Corrupt torrent: string length not followed by a colon.")
                 
-                # FIX: Correctly convert the length bytes to an integer
-                str_len = int(len(temp_data[i:colon_index]))
+                str_len = int(temp_data[i:colon_index])
                 
-                # Skip the length, the colon, and the string data itself.
-                i += (colon_index - i) + str_len
+                # Jump the index past the whole string: 'len' + ':' + data
+                i = colon_index + 1 + str_len
             
-            # This check must be after potential index jumps
+            # --- THE REAL FUCKING FIX IS HERE ---
+            elif char == b'i':
+                # We need to find the closing 'e' and jump past it.
+                end_of_int = temp_data.find(b'e', i)
+                if end_of_int == -1:
+                    raise ValueError("Corrupt torrent: integer not followed by 'e'.")
+                i = end_of_int + 1
+            # --- END OF THE FIX ---
+            else:
+                # Should not happen in a valid bencode file
+                raise ValueError(f"Unexpected character in info dict: {char}")
+            
             if level == 0:
-                # The end offset is the current position PLUS the final 'e'
-                end_offset = i + 1 
+                end_offset = i
                 break
-            
-            i += 1
 
         if end_offset == 0:
             raise ValueError("Could not determine the end of the self.info dictionary.")
         
+        # The slice should go from the start of the 'd' to the final 'e'
         raw_info_bytes = temp_data[:end_offset]
-        print("Info dictionary has been extracted.")
+        print("Info dictionary raw bytes have been extracted.")
         
         self.info_hash = self.generate_hash(raw_info_bytes)
         if self.info_hash:
-            print("Info_hash has been generated")
-            print(f"Info_Hash: {self.info_hash.hex()}")
+            print(f"Info_hash has been generated: {self.info_hash.hex()}")
         return self.info_hash
-
+     
 
 #-----------------------------------------------------
     """
