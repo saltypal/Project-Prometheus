@@ -23,10 +23,10 @@ event: This parameter tells the tracker what's happening. The most common events
 
 class Tracker:
         """
-        This is the tracker class. This class consists of functions that handle with 
-        1. hash generation.
+        This class deals completely with contacting with tracker and maintaining a timed relationship between the tracker, getting and sending information
+
         """
-        def __init__(self, peerID, portNum,rawTorrent,cleanTorrent,info_hash,announceList,sizeOfTorrent,):
+        def __init__(self, peerID, portNum,rawTorrent,cleanTorrent,info_hash,announceList,sizeOfTorrent):
 
                 self.peerID = peerID
                 self.portNum = portNum
@@ -36,5 +36,15 @@ class Tracker:
                 self.announceList = announceList
                 self.torrentSize = sizeOfTorrent
                 print("Tracker is Ready. Proceeding...")
+                # self.additional = torrent()
+
+
+                
+        """
+        The thing about tracker is that, there are 2 types of protocols being used.
+        one is the well known HTTPS connection that uses tcp. The other one is the udp connection that is more faster apparently. 
+        udp is a part of BEP 15 implement
+        """
+
 
        
