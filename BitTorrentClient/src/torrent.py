@@ -202,7 +202,36 @@ class Torrent:
 #-----------------------------------------------------
     """
     Pieces related.
+
+    1. Getting pieces
+    2.
     """
+    def getPieces(self):
+        """
+        The pieces are in the info directory. 
+        It is a string consisting of the concatenation of all 20-byte SHA1 hash values, one per piece (byte string, i.e. not urlencoded)
+        
+        """
+        if not self.cleanTorrent:
+            print("Error: Torrent is not decoded yet.")
+            return 0
+        if not self.info:
+            raise ValueError("Invalid torrent file: 'info' dictionary not found.")
+        self.pieces = self.info[b'pieces']
+        if self.pieces:
+            print("The torrent's pieces hashes are ready. ")
+            print(self.pieces)
+    
+    def pieceHashGenerator():
+        """
+        This is to generate a 20Byte sha1 hash from the piece that was downloaded
+        """
+    
+    
+#-----------------------------------------------------
+   
+
+    
 #-----------------------------------------------------
     """
     All getters and setters.s
@@ -222,5 +251,5 @@ class Torrent:
     def getAnnounceList(self):
         self.announceList = self.cleanTorrent[b'announce']
         return self.announceList
-    
+        
 #-------------------
