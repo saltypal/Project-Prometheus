@@ -1,6 +1,7 @@
 import socket
 import threading
 import traceback
+import json
 
 
 class Connection:
@@ -9,6 +10,7 @@ class Connection:
         self.sock = sock
         self.addr = addr
         self.on_message = on_message
+        self.username = None  # will be set after handshake
         if name:
             self.name = name
         elif addr and len(addr) >= 2:
@@ -16,6 +18,7 @@ class Connection:
         else:
             self.name = 'peer'
         self._stop = threading.Event()
+        self._buffer = ""  # buffer for line-delimited messages
         self._thread = threading.Thread(target=self._recv_loop, daemon=True)
         self._thread.start()
 
@@ -35,19 +38,46 @@ class Connection:
                 try:
                     text = data.decode('utf-8')
                 except UnicodeDecodeError:
-                    text = '[non-text data]'
+                    continue  # skip invalid data
 
-                if self.on_message:
+                self._buffer += text
+                
+                # Process complete lines (newline-delimited messages)
+                while '\n' in self._buffer:
+                    line, self._buffer = self._buffer.split('\n', 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
                     try:
-                        self.on_message(self, text)
-                    except Exception:
-                        traceback.print_exc()
+                        message_obj = json.loads(line)
+                        if self.on_message:
+                            try:
+                                self.on_message(self, message_obj)
+                            except Exception:
+                                traceback.print_exc()
+                    except json.JSONDecodeError:
+                        # Handle legacy plain text for compatibility
+                        if self.on_message:
+                            try:
+                                self.on_message(self, {"type": "text", "text": line})
+                            except Exception:
+                                traceback.print_exc()
         finally:
             self.close()
 
     def send(self, text: str):
+        """Legacy send method for plain text (deprecated, use send_json)"""
         try:
             self.sock.send(text.encode('utf-8'))
+        except Exception:
+            raise
+    
+    def send_json(self, obj: dict):
+        """Send a JSON object as a newline-delimited message"""
+        try:
+            message = json.dumps(obj) + '\n'
+            self.sock.send(message.encode('utf-8'))
         except Exception:
             raise
 
