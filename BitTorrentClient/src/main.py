@@ -1,6 +1,7 @@
 from client import client_Info
 from tracker import Tracker
 from torrent import Torrent
+from session import Session
 """
 
 MADE BY SATYA PALADUGU AT 30/9/2025 7:55 PM
@@ -29,16 +30,22 @@ class bitTorrent_client:
     """
         
     def start_torrent(self):   
-        file = r'BitTorrentClient\sample_torrent\manjaro.torrent'
+        file = r'BitTorrentClient\sample_torrent\cyberpunk2077.torrent'
 
         # First load the torrent 
         T = Torrent(file)
+        
         T.write_decoded_to_file()
         info_hash = T.generate_info_hash()
         size = T.calculate_total_size()
-
+        announceList = T.getAnnounceList()
+        
+        piecesList = T.getPieces()
         # Tracker Creation
-        Tr = Tracker(self.peerID,self.portNumber,T.getRawTorrent,T.getCleanTorrent,T.getInfoHash,T.getAnnounceList,T.getTotalSize)
+        Tr = Tracker(self.peerID,self.portNumber,info_hash,size)
+    
+        # Begin Session
+        S = Session(self.peerID,self.portNumber,size)
 
 
 if __name__ == '__main__':

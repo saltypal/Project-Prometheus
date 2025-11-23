@@ -2,6 +2,7 @@ import hashlib
 import requests
 import torrent
 import client
+from session import Session 
 """
 
 MADE BY SATYA PALADUGU AT 30/9/2025 7:55 PM
@@ -25,17 +26,19 @@ class Tracker:
         """
         This class deals completely with contacting with tracker and maintaining a timed relationship between the tracker, getting and sending information
 
+        What are the things that the tracker class needs so that it communicates with the tracker:
+        1
+
         """
-        def __init__(self, peerID, portNum,rawTorrent,cleanTorrent,info_hash,announceList,sizeOfTorrent):
+        def __init__(self, peerID, portNum,info_hash,announceList,sizeOfTorrent):
 
                 self.peerID = peerID
                 self.portNum = portNum
                 self.info_hash = info_hash
-                self.rawTorrent = rawTorrent
-                self.cleanTorrent = cleanTorrent
                 self.announceList = announceList
                 self.torrentSize = sizeOfTorrent
                 print("Tracker is Ready. Proceeding...")
+                print(announceList)
                 # self.additional = torrent()
 
 
@@ -46,5 +49,9 @@ class Tracker:
         udp is a part of BEP 15 implement
         """
 
-
-       
+        def make_tracker_Request(self, session: 'Session', event: str):
+                 """
+            Builds and sends the announce request to the tracker.
+            'event' can be 'started', 'stopped', or 'completed'.
+            """
+                
