@@ -2,6 +2,7 @@ import socket
 import struct
 import threading
 import time
+from tqdm import tqdm
 
 """
 MADE BY SATYA PALADUGU
@@ -51,7 +52,6 @@ class PeerConnection(threading.Thread):
         self.start_listening()
         self.close()
 
-    # ... (Connection helpers same as before) ...
     def connect(self):
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -103,18 +103,17 @@ class PeerConnection(threading.Thread):
             except Exception:
                 self.connected = False
                 break
-        # Cleanup
-        self.piece_manager.remove_peer(self.ip) # Using IP as ID for now
+        self.piece_manager.remove_peer(self.ip) 
 
     def handle_message(self, msg_id, payload):
         if msg_id == 0:
             self.peer_choking = True
         elif msg_id == 1:
             self.peer_choking = False
+            # tqdm.write(f"[PEER] {self.ip} Unchoked us")
             self.request_next_block()
         elif msg_id == 2:
             self.peer_interested = True
-            # Note: We NO LONGER unchoke immediately here. Main loop handles it.
         elif msg_id == 3:
             self.peer_interested = False
         elif msg_id == 4:
@@ -132,7 +131,6 @@ class PeerConnection(threading.Thread):
             for i in range(8):
                 self.bitfield.append(((byte >> (7 - i)) & 1) == 1)
         
-        # Update Brain with what this peer has
         self.piece_manager.update_peer(self.ip, self.bitfield)
         
         if any(self.bitfield): self.send_interested()
@@ -143,7 +141,6 @@ class PeerConnection(threading.Thread):
         while len(self.bitfield) <= piece_index: self.bitfield.append(False)
         self.bitfield[piece_index] = True
         
-        # Update Brain
         self.piece_manager.update_peer(self.ip, self.bitfield)
         
         if not self.am_interested: self.send_interested()
@@ -157,7 +154,6 @@ class PeerConnection(threading.Thread):
 
     def request_next_block(self):
         if self.peer_choking: return
-        # Pass OUR IP/ID so Brain knows which bitfield to check
         request = self.piece_manager.get_next_request(self.ip)
         if request is None: return
 
@@ -173,15 +169,11 @@ class PeerConnection(threading.Thread):
         begin = struct.unpack('>I', payload[4:8])[0]
         block_data = payload[8:]
         
-        # Metric Update
         self.downloaded_this_round += len(block_data)
-        
         self.piece_manager.block_received(piece_index, begin, block_data)
         self.request_next_block()
 
-    # --- UPLOADING & CHOKING LOGIC ---
     def handle_request(self, payload):
-        """ If we are choking, we IGNORE requests (Standard Tit-for-Tat) """
         if self.am_choking: return
         
         if len(payload) < 12: return
@@ -200,26 +192,22 @@ class PeerConnection(threading.Thread):
     def choke(self):
         if not self.am_choking:
             try:
-                self.sock.send(struct.pack('>Ib', 1, 0)) # ID 0 = Choke
+                self.sock.send(struct.pack('>Ib', 1, 0)) 
                 self.am_choking = True
             except: pass
 
     def unchoke(self):
         if self.am_choking:
             try:
-                self.sock.send(struct.pack('>Ib', 1, 1)) # ID 1 = Unchoke
+                self.sock.send(struct.pack('>Ib', 1, 1))
                 self.am_choking = False
             except: pass
 
     def get_speed(self):
-        """ Returns bytes/sec since last call """
         now = time.time()
         duration = now - self.last_measure_time
         if duration == 0: return 0
-        
         speed = self.downloaded_this_round / duration
-        
-        # Reset counters
         self.downloaded_this_round = 0
         self.last_measure_time = now
         self.download_speed = speed

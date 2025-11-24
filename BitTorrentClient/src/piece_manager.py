@@ -9,7 +9,7 @@ import random
 """
 MADE BY SATYA PALADUGU
 The Brain: Manages file state, verifies pieces, and delegates blocks.
-Updated for RAREST FIRST Strategy.
+Updated for RAREST FIRST Strategy & TQDM Progress Bar.
 """
 
 BLOCK_SIZE = 16384 
@@ -56,9 +56,11 @@ class PieceManager:
         self.state_filename = self.filename + ".state"
         
         # Rarest First State
-        self.peers_bitfields = {} # {peer_id: bitfield_list}
+        self.peers_bitfields = {} 
         
-        self.pbar = tqdm(total=len(self.pieces), unit='piece', desc='Progress', ncols=100)
+        # PROGRESS BAR
+        # We leave ncols=None to auto-fit terminal
+        self.pbar = tqdm(total=len(self.pieces), unit='piece', desc=f'[{torrent.info_hash.hex()[:6]}] Download', dynamic_ncols=True)
 
         if not os.path.exists(self.filename):
             try:
@@ -75,6 +77,9 @@ class PieceManager:
         total_length = self.torrent.total_size
         pieces_hashes = self.torrent.cleanTorrent[b'info'][b'pieces']
         num_pieces = math.ceil(total_length / piece_length)
+        
+        print(f"   > Piece Length: {piece_length / 1024:.2f} KB")
+        print(f"   > Total Pieces: {num_pieces}")
         
         for i in range(num_pieces):
             if i == num_pieces - 1:
@@ -94,7 +99,8 @@ class PieceManager:
             with open(self.state_filename, 'wb') as f:
                 pickle.dump(finished_indices, f)
         except Exception as e:
-            print(f"Failed to save state: {e}")
+            # Use tqdm.write to print above the progress bar
+            tqdm.write(f"[!] Failed to save state: {e}")
 
     def load_state(self):
         if os.path.exists(self.state_filename):
@@ -107,12 +113,12 @@ class PieceManager:
                         self.pieces[index].set_finished()
                         count += 1
                 self.pbar.update(count)
+                tqdm.write(f"   > Resumed: {count} pieces already downloaded.")
             except Exception as e:
-                print(f"Failed to load state: {e}")
+                tqdm.write(f"[!] Failed to load state: {e}")
 
-    # --- PEER MANAGEMENT (For Rarest First) ---
+    # --- PEER MANAGEMENT ---
     def update_peer(self, peer_id, bitfield):
-        """Track what peers have"""
         with self.lock:
             self.peers_bitfields[peer_id] = bitfield
 
@@ -121,15 +127,13 @@ class PieceManager:
             if peer_id in self.peers_bitfields:
                 del self.peers_bitfields[peer_id]
 
-    # --- WORKER INTERFACE (RAREST FIRST LOGIC) ---
+    # --- WORKER INTERFACE ---
     def get_next_request(self, peer_id):
         with self.lock: 
-            # 1. Get this peer's bitfield
             if peer_id not in self.peers_bitfields:
                 return None
             peer_bitfield = self.peers_bitfields[peer_id]
 
-            # 2. Identify Candidate Pieces (Ones we need & they have)
             candidates = []
             for piece in self.pieces:
                 if not piece.finished and piece.index < len(peer_bitfield) and peer_bitfield[piece.index]:
@@ -138,11 +142,7 @@ class PieceManager:
             if not candidates:
                 return None
 
-            # 3. Calculate Frequency (Rarity)
-            # Count how many *other* peers have these candidate pieces
-            # Optimization: We calculate this on the fly for candidates only
-            rarity_map = [] # (piece, count)
-            
+            rarity_map = [] 
             for piece in candidates:
                 count = 0
                 for pid, bf in self.peers_bitfields.items():
@@ -150,12 +150,9 @@ class PieceManager:
                         count += 1
                 rarity_map.append((piece, count))
             
-            # 4. Sort by Rarity (Low count first) -> Randomize ties to prevent race conditions
-            # Python sort is stable, so shuffle first to randomize ties
             random.shuffle(rarity_map)
             rarity_map.sort(key=lambda x: x[1])
             
-            # 5. Select Block
             for piece, freq in rarity_map:
                 for block_index, block in enumerate(piece.blocks):
                     if block.state == 0: 
@@ -194,6 +191,7 @@ class PieceManager:
             self.save_state()
             self.pbar.update(1)
         else:
+            tqdm.write(f"[!] Hash Mismatch on Piece {piece.index}. Discarding.")
             piece.reset() 
 
     def _write_to_disk(self, piece, data):
@@ -203,4 +201,4 @@ class PieceManager:
                 f.seek(piece_start_offset)
                 f.write(data)
         except Exception as e:
-            print(f"DISK I/O ERROR: {e}")
+            tqdm.write(f"[CRITICAL] Disk I/O Error: {e}")

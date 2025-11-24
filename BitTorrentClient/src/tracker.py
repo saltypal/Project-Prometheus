@@ -30,6 +30,7 @@ It forgets you exist the moment the connection closes. Every time you talk to it
 you must re-introduce yourself and update your status from scratch
 
 """
+
 class Tracker:
     def __init__(self, tracker_urls):
         self.tracker_urls = []
@@ -46,13 +47,8 @@ class Tracker:
         self.decoder = bencodeDecode()
 
     def get_peers(self, info_hash, peer_id, port, uploaded, downloaded, left):
-        """
-        Scrapes ALL trackers and returns unique peers.
-        """
         all_peers = set() 
         final_interval = 1800
-
-        print(f"--- Contacting {len(self.tracker_urls)} trackers ---")
 
         for url in self.tracker_urls:
             try:
@@ -65,22 +61,19 @@ class Tracker:
                     peers, interval = self.udp_scrape(url, info_hash, peer_id, port, uploaded, downloaded, left)
                 
                 if peers:
+                    print(f"   ✓ [SUCCESS] {url} -> {len(peers)} peers")
                     for p in peers:
                         all_peers.add(p)
                     final_interval = interval
-                    # print(f"✓ {url} -> Found peers.")
+                else:
+                    pass 
+                    # print(f"   x [FAIL] {url}")
 
             except Exception as e:
-                continue
+                pass
 
         unique_peers_list = list(all_peers)
-        
-        if unique_peers_list:
-            print(f"--- Total Unique Peers Found: {len(unique_peers_list)} ---")
-            return unique_peers_list, final_interval
-        else:
-            print("All trackers failed.")
-            return [], 0
+        return unique_peers_list, final_interval
 
     def http_scrape(self, url, info_hash, peer_id, port, uploaded, downloaded, left):
         params = {
@@ -97,7 +90,7 @@ class Tracker:
         headers = {'User-Agent': 'SatyaTorrent/0.1'}
 
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=3) 
+            response = requests.get(url, params=params, headers=headers, timeout=2) 
             response.raise_for_status()
             
             if response.content.startswith(b'<'): return [], 0
