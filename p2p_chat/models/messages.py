@@ -11,6 +11,7 @@ class Message:
     receiver: str
     text: str
     timestamp: float
+    status: str = "delivered"  # "delivered", "queued", "failed"
     
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
@@ -18,7 +19,8 @@ class Message:
             "sender": self.sender,
             "receiver": self.receiver,
             "text": self.text,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
+            "status": self.status
         }
     
     @classmethod
@@ -28,7 +30,8 @@ class Message:
             sender=data["sender"],
             receiver=data["receiver"],
             text=data["text"],
-            timestamp=data["timestamp"]
+            timestamp=data["timestamp"],
+            status=data.get("status", "delivered")
         )
 
 

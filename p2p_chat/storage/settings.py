@@ -1,12 +1,19 @@
 """Settings storage and retrieval"""
 
 import json
+import os
 from pathlib import Path
 
 
 def get_config_dir() -> Path:
     """Get the configuration directory path"""
-    config_dir = Path.home() / ".p2p_chat"
+    # Allow override via environment variable for testing
+    env_config = os.getenv('P2P_CHAT_CONFIG')
+    if env_config:
+        config_dir = Path(env_config)
+    else:
+        config_dir = Path.home() / ".p2p_chat"
+    
     config_dir.mkdir(exist_ok=True)
     return config_dir
 
