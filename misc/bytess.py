@@ -1,8 +1,8 @@
 # goal: 20 bytes [clientID][]
 # PAL000-<12 random bytes>
 
-# normal = bytes("-PAL000-".encode('utf-8'))
-normal = b'-SALPAL-'
+normal = bytes(b"-PAL000-".encode('utf-8'))
+# normal = b'-SALPAL-'
 print(normal)
 
 import random

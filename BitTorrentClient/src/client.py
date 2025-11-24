@@ -32,6 +32,7 @@ class client_Info:
         Your method only generates bytes from the small set of numbers that represent digits"""
         otherBytes = bytes(random.randint(0,255) for z in range(12))
         peerID = clientName+otherBytes
+        print(f"Peer ID Generated: {peerID}")
         return peerID
 
     def generatePortNumber(self):
@@ -40,6 +41,8 @@ class client_Info:
         """
 
         self.portNumber = 6882
+        print(f"Port Number Generated: {self.portNumber}")
+
         return self.portNumber
     
     # Getters
