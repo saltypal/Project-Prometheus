@@ -2,20 +2,21 @@ import hashlib
 import math
 import threading
 import os
-import pickle # <--- For saving state
+import pickle 
 from tqdm import tqdm 
+import random
 
 """
 MADE BY SATYA PALADUGU
 The Brain: Manages file state, verifies pieces, and delegates blocks.
-Updated for Phase 2: RESUME STATE (Persistence).
+Updated for RAREST FIRST Strategy.
 """
 
 BLOCK_SIZE = 16384 
 
 class Block:
     def __init__(self):
-        self.state = 0 # 0=Missing, 1=Pending, 2=Retrieved
+        self.state = 0 
         self.data = b''
 
 class Piece:
@@ -34,7 +35,6 @@ class Piece:
         self.finished = False
 
     def set_finished(self):
-        """Mark piece as done (used when loading state)"""
         self.finished = True
         for block in self.blocks:
             block.state = 2 
@@ -55,12 +55,11 @@ class PieceManager:
         self.filename = f"downloaded_{torrent.info_hash.hex()[:6]}.dat"
         self.state_filename = self.filename + ".state"
         
-        print(f"Storage: {self.filename}")
+        # Rarest First State
+        self.peers_bitfields = {} # {peer_id: bitfield_list}
         
-        # Initialize Progress Bar
         self.pbar = tqdm(total=len(self.pieces), unit='piece', desc='Progress', ncols=100)
 
-        # Initialize File
         if not os.path.exists(self.filename):
             try:
                 with open(self.filename, "wb") as f:
@@ -69,7 +68,6 @@ class PieceManager:
             except Exception as e:
                 print(f"Error creating file: {e}")
         
-        # RESUME STATE
         self.load_state()
             
     def _init_pieces(self):
@@ -90,87 +88,110 @@ class PieceManager:
             this_hash = pieces_hashes[start:end]
             self.pieces.append(Piece(i, this_length, this_hash))
 
-    # --- STATE PERSISTENCE (PHASE 2) ---
     def save_state(self):
-        """Save the list of finished piece indices"""
         finished_indices = [p.index for p in self.pieces if p.finished]
         try:
             with open(self.state_filename, 'wb') as f:
                 pickle.dump(finished_indices, f)
-            # print("State saved.")
         except Exception as e:
             print(f"Failed to save state: {e}")
 
     def load_state(self):
-        """Load state and update progress"""
         if os.path.exists(self.state_filename):
             try:
                 with open(self.state_filename, 'rb') as f:
                     finished_indices = pickle.load(f)
-                
                 count = 0
                 for index in finished_indices:
                     if index < len(self.pieces):
                         self.pieces[index].set_finished()
                         count += 1
-                
                 self.pbar.update(count)
-                print(f"Resumed: {count} pieces already downloaded.")
             except Exception as e:
                 print(f"Failed to load state: {e}")
 
-    # --- WORKER INTERFACE ---
+    # --- PEER MANAGEMENT (For Rarest First) ---
+    def update_peer(self, peer_id, bitfield):
+        """Track what peers have"""
+        with self.lock:
+            self.peers_bitfields[peer_id] = bitfield
 
-    def get_next_request(self, peer_bitfield):
+    def remove_peer(self, peer_id):
+        with self.lock:
+            if peer_id in self.peers_bitfields:
+                del self.peers_bitfields[peer_id]
+
+    # --- WORKER INTERFACE (RAREST FIRST LOGIC) ---
+    def get_next_request(self, peer_id):
         with self.lock: 
+            # 1. Get this peer's bitfield
+            if peer_id not in self.peers_bitfields:
+                return None
+            peer_bitfield = self.peers_bitfields[peer_id]
+
+            # 2. Identify Candidate Pieces (Ones we need & they have)
+            candidates = []
             for piece in self.pieces:
-                if piece.finished:
-                    continue
-                
-                if piece.index < len(peer_bitfield) and peer_bitfield[piece.index]:
-                    for block_index, block in enumerate(piece.blocks):
-                        if block.state == 0: 
-                            block.state = 1 
-                            return piece.index, block_index * BLOCK_SIZE, min(BLOCK_SIZE, piece.length - (block_index * BLOCK_SIZE))
+                if not piece.finished and piece.index < len(peer_bitfield) and peer_bitfield[piece.index]:
+                    candidates.append(piece)
+            
+            if not candidates:
+                return None
+
+            # 3. Calculate Frequency (Rarity)
+            # Count how many *other* peers have these candidate pieces
+            # Optimization: We calculate this on the fly for candidates only
+            rarity_map = [] # (piece, count)
+            
+            for piece in candidates:
+                count = 0
+                for pid, bf in self.peers_bitfields.items():
+                    if piece.index < len(bf) and bf[piece.index]:
+                        count += 1
+                rarity_map.append((piece, count))
+            
+            # 4. Sort by Rarity (Low count first) -> Randomize ties to prevent race conditions
+            # Python sort is stable, so shuffle first to randomize ties
+            random.shuffle(rarity_map)
+            rarity_map.sort(key=lambda x: x[1])
+            
+            # 5. Select Block
+            for piece, freq in rarity_map:
+                for block_index, block in enumerate(piece.blocks):
+                    if block.state == 0: 
+                        block.state = 1 
+                        return piece.index, block_index * BLOCK_SIZE, min(BLOCK_SIZE, piece.length - (block_index * BLOCK_SIZE))
             return None
 
     def block_received(self, piece_index, begin, data):
         with self.lock: 
             piece = self.pieces[piece_index]
             block_index = begin // BLOCK_SIZE
-            
             block = piece.blocks[block_index]
             block.data = data
             block.state = 2 
-            
             if piece.is_complete():
                 self._verify_and_write(piece)
 
     def read_block(self, piece_index, block_offset, length):
         with self.lock:
             piece = self.pieces[piece_index]
-            if not piece.finished:
-                return None 
-            
+            if not piece.finished: return None 
             piece_start_offset = piece.index * self.torrent.cleanTorrent[b'info'][b'piece length']
             global_offset = piece_start_offset + block_offset
-            
             try:
                 with open(self.filename, "rb") as f:
                     f.seek(global_offset)
-                    data = f.read(length)
-                    return data
-            except Exception:
-                return None
+                    return f.read(length)
+            except Exception: return None
 
     def _verify_and_write(self, piece):
         raw_data = piece.assemble_data()
         my_hash = hashlib.sha1(raw_data).digest()
-        
         if my_hash == piece.hash:
             piece.finished = True
             self._write_to_disk(piece, raw_data)
-            self.save_state() # <--- AUTO SAVE on success
+            self.save_state()
             self.pbar.update(1)
         else:
             piece.reset() 
