@@ -99,6 +99,7 @@ class Torrent:
     def generate_info_hash(self):
         """
         This function is an attempt to create self.info hash without encoding the whole self.info_hash.
+        find 4:info  and from the next word keep going until you find end point and you add it
         """
         if not self.rawTorrent:
             print("Error: Raw torrent data not available.")
@@ -144,7 +145,6 @@ class Torrent:
                 # Jump the index past the whole string: 'len' + ':' + data
                 i = colon_index + 1 + str_len
             
-            # --- THE REAL FUCKING FIX IS HERE ---
             elif char == b'i':
                 # We need to find the closing 'e' and jump past it.
                 end_of_int = temp_data.find(b'e', i)
@@ -223,18 +223,18 @@ class Torrent:
             print("The torrent's pieces hashes are ready. ")
             print(self.pieces)
 
-    # def get_announce_URL(self):
-    #         """
-    #         Returns the announce URL as a string, handling bytes and list cases.
-    #         """
-    #         announce = self.getAnnounceList()
-    #         # If announce is a list, take the first element
-    #         if isinstance(announce, list):
-    #             announce = announce[0]
-    #         # If announce is bytes, decode to string
-    #         if isinstance(announce, bytes):
-    #             announce = announce.decode('utf-8')
-    #         return announce
+        # def get_announce_URL(self):
+        #         """
+        #         Returns the announce URL as a string, handling bytes and list cases.
+        #         """
+        #         announce = self.getAnnounceList()
+        #         # If announce is a list, take the first element
+        #         if isinstance(announce, list):
+        #             announce = announce[0]
+        #         # If announce is bytes, decode to string
+        #         if isinstance(announce, bytes):
+        #             announce = announce.decode('utf-8')
+        #         return announce
     
     # def pieceHashGenerator():
     #     """

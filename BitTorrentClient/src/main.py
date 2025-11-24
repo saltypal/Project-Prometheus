@@ -19,12 +19,12 @@ Updated with Verbose Logging and Progress Tracking.
 """
 
 # CONFIGURATION
-ENABLE_DHT = True 
+ENABLE_DHT = False 
 
 class bitTorrent_client:
     def __init__(self):
         print("\n" + "="*50)
-        print("      SATYA BITTORRENT CLIENT v1.0 (PHASE 1)      ")
+        print("      SATYA BITTORRENT CLIENT v1.0       ")
         print("="*50 + "\n")
         
         client = client_Info() 
@@ -36,7 +36,7 @@ class bitTorrent_client:
         print(f"[INFO] Listening Port: {self.portNumber}")
 
     def start_torrent(self):   
-        file_path = r'BitTorrentClient\sample_torrent\debian-12.8.0-amd64-netinst.iso.torrent'
+        file_path = r'BitTorrentClient\sample_torrent\deb.torrent'
 
         print(f"\n=== STEP 1: LOADING METADATA ===")
         try:

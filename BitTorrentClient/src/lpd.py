@@ -15,11 +15,15 @@ MCAST_PORT = 6771
 class LPD(threading.Thread):
     def __init__(self, info_hash, peer_id, port):
         threading.Thread.__init__(self)
+
+        # store about the details
         self.info_hash = info_hash
         self.peer_id = peer_id
         self.port = port
         self.running = False
-        self.found_peers = set() # (ip, port)
+        self.found_peers = set() 
+
+
 
     def run(self):
         self.running = True

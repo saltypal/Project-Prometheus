@@ -74,7 +74,8 @@ class Tracker:
 
         unique_peers_list = list(all_peers)
         return unique_peers_list, final_interval
-
+    
+    # If the tracker is an Http tracker
     def http_scrape(self, url, info_hash, peer_id, port, uploaded, downloaded, left):
         params = {
             'info_hash': info_hash,
@@ -107,6 +108,7 @@ class Tracker:
         except Exception:
             return [], 0
 
+    
     def udp_scrape(self, url, info_hash, peer_id, port, uploaded, downloaded, left):
         parsed = urlparse(url)
         hostname = parsed.hostname
