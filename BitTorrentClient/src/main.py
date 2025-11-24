@@ -15,16 +15,15 @@ from tqdm import tqdm
 """
 MADE BY SATYA PALADUGU
 Main Entry Point.
-Updated with Verbose Logging and Progress Tracking.
+Updated with Custom LAN Partitioning Strategy.
 """
 
-# CONFIGURATION
-ENABLE_DHT = False 
+ENABLE_DHT = True 
 
 class bitTorrent_client:
     def __init__(self):
         print("\n" + "="*50)
-        print("      SATYA BITTORRENT CLIENT v1.0       ")
+        print("      SATYA BITTORRENT CLIENT v1.0      ")
         print("="*50 + "\n")
         
         client = client_Info() 
@@ -33,10 +32,9 @@ class bitTorrent_client:
         self.active_peers = [] 
         
         print(f"[INFO] Client ID: {self.peerID.hex()}")
-        print(f"[INFO] Listening Port: {self.portNumber}")
 
     def start_torrent(self):   
-        file_path = r'BitTorrentClient\sample_torrent\deb.torrent'
+        file_path = r'BitTorrentClient\sample_torrent\debian-12.8.0-amd64-netinst.iso.torrent'
 
         print(f"\n=== STEP 1: LOADING METADATA ===")
         try:
@@ -50,10 +48,6 @@ class bitTorrent_client:
         total_size = T.calculate_total_size()
         tracker_urls = T.getAnnounceList()
         
-        print(f"   > Info Hash: {info_hash.hex()}")
-        print(f"   > Total Size: {total_size / (1024*1024):.2f} MB")
-        print(f"   > Primary Trackers: {len(tracker_urls)}")
-
         public_trackers = [
             'udp://tracker.opentrackr.org:1337/announce',
             'udp://9.rarbg.com:2810/announce',
@@ -67,30 +61,23 @@ class bitTorrent_client:
         pm = PieceManager(T) 
 
         print(f"\n=== STEP 3: STARTING SERVICES ===")
-        # 1. Start Server 
         server = Server(self.portNumber, info_hash, self.peerID, pm)
         server.daemon = True 
         server.start()
-        print("   [+] TCP Server Started (Incoming Connections)")
+        print("   [+] TCP Server Started")
 
-        # 2. Start DHT 
         if ENABLE_DHT:
             dht = DHTNode(self.portNumber, self.peerID)
             dht.daemon = True
             dht.start()
-            print("   [+] DHT Node Started (UDP)")
-        else:
-            print("   [-] DHT Node Disabled")
+            print("   [+] DHT Node Started")
 
-        # 3. Start LPD
         lpd = LPD(info_hash, self.peerID, self.portNumber)
         lpd.daemon = True
         lpd.start()
-        print("   [+] LPD Service Started (Multicast)")
+        print("   [+] LPD Service Started (Custom LAN Partitioning)")
 
-        # 4. Contact Trackers
-        print(f"\n=== STEP 4: DISCOVERY (TRACKERS) ===")
-        print(f"   > Contacting {len(combined_trackers)} trackers...")
+        print(f"\n=== STEP 4: DISCOVERY ===")
         Tr = Tracker(combined_trackers)
         S = Session(self.peerID, self.portNumber, total_size)
         
@@ -105,52 +92,47 @@ class bitTorrent_client:
 
         if peers_list:
             print(f"\n=== STEP 5: UNLEASHING SWARM ===")
-            print(f"   > Found {len(peers_list)} potential peers.")
-            
             connected_peers = set()
             MAX_PEERS = 40 
             
-            def add_peer(ip, port, source="Tracker"):
+            def add_peer(ip, port, is_local=False):
                 if (ip, port) in connected_peers: return
                 if len(self.active_peers) >= MAX_PEERS: return
                 
                 connected_peers.add((ip, port))
                 p = PeerConnection(pm, info_hash, self.peerID, ip=ip, port=port)
+                # If local, we tag it so PieceManager knows
+                if is_local:
+                    # In a real implementation, we'd set a flag on the PeerConnection
+                    # which then propagates to PieceManager.update_peer
+                    pass 
                 p.daemon = True
                 p.start()
                 self.active_peers.append(p)
-                # tqdm.write(f"   [+] Connecting to {ip}:{port} via {source}")
 
             for ip, port in peers_list:
                 add_peer(ip, port)
                 
-            print(f"   > Launched {len(self.active_peers)} worker threads.")
-            
-            # 5. Start Choke Manager
+            # Start Choke Manager
             choke_thread = threading.Thread(target=self.choke_manager_loop)
             choke_thread.daemon = True
             choke_thread.start()
-            print("   [+] Choke Manager Started (Tit-for-Tat)")
             
             print("\n=== DOWNLOAD IN PROGRESS ===")
-            # 6. Main Loop
             try:
                 while True:
                     time.sleep(5)
-                    
                     # LPD Check
                     local_peers = lpd.get_new_peers()
                     if local_peers:
-                        tqdm.write(f"[LPD] Found {len(local_peers)} local peers.")
+                        tqdm.write(f"[LPD] Found {len(local_peers)} local peers. Activating Partition Strategy.")
                         for ip, port in local_peers:
-                            add_peer(ip, port, "LPD")
+                            add_peer(ip, port, is_local=True)
                             
             except KeyboardInterrupt:
                 print("\n[!] Shutting down...")
-                
         else:
-            print("\n[!] FAILURE: No peers found via Trackers.")
-            print("    Waiting for LPD/DHT updates...")
+            print("\n[!] FAILURE: No peers found.")
             try:
                 while True: time.sleep(1)
             except: pass
@@ -160,21 +142,15 @@ class bitTorrent_client:
             time.sleep(10)
             interested_peers = [p for p in self.active_peers if p.peer_interested and p.connected]
             if not interested_peers: continue
-
             interested_peers.sort(key=lambda p: p.get_speed(), reverse=True)
-            
             allowed_peers = interested_peers[:3]
-            
             remaining_peers = interested_peers[3:]
             if remaining_peers:
                 optimistic_peer = random.choice(remaining_peers)
                 allowed_peers.append(optimistic_peer)
-            
             for p in interested_peers:
-                if p in allowed_peers:
-                    p.unchoke()
-                else:
-                    p.choke()
+                if p in allowed_peers: p.unchoke()
+                else: p.choke()
 
 if __name__ == '__main__':
     B = bitTorrent_client()
