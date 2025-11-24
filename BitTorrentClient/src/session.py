@@ -16,10 +16,9 @@ class Session:
         # self.GetPieceHash(self) = T.pieceHashGenerator()
         self.total_downloaded = 0
         self.total_uploaded = 0
+        print("Bittorrent session has started, setting variables")
     
-    
-    def getLeft(self):
-        return self.sizeOfTorrent-self.total_downloaded
+   
     
     def update_downloaded(self, download):
         self.total_downloaded += download
@@ -30,3 +29,12 @@ class Session:
     """
     There has to be a function to keep track of the downloaded content.
     """
+
+    # Getters and setters
+    def getDownloaded(self):
+        return self.total_downloaded
+     
+    def getLeft(self):
+        return self.sizeOfTorrent-self.total_downloaded
+    def getUploaded(self):
+        return self.total_uploaded
