@@ -10,6 +10,7 @@ LAST MODIFIED: 0/9/2025 7:55 PM
 """
 
 class Torrent:
+        
     """
     This class deals with the torrent content, self.information that has to be retrieved from the torrent.
     1. Decoded Bencode
@@ -221,14 +222,27 @@ class Torrent:
         if self.pieces:
             print("The torrent's pieces hashes are ready. ")
             print(self.pieces)
+
+    # def get_announce_URL(self):
+    #         """
+    #         Returns the announce URL as a string, handling bytes and list cases.
+    #         """
+    #         announce = self.getAnnounceList()
+    #         # If announce is a list, take the first element
+    #         if isinstance(announce, list):
+    #             announce = announce[0]
+    #         # If announce is bytes, decode to string
+    #         if isinstance(announce, bytes):
+    #             announce = announce.decode('utf-8')
+    #         return announce
     
-    def pieceHashGenerator():
-        """
-        This is to generate a 20Byte sha1 hash from the piece that was downloaded
-        """
+    # def pieceHashGenerator():
+    #     """
+    #     This is to generate a 20Byte sha1 hash from the piece that was downloaded
+    #     """
     
     
-#-----------------------------------------------------
+#--------------------------------------------f---------
    
 
     
@@ -249,7 +263,38 @@ class Torrent:
         return self.total_size
 
     def getAnnounceList(self):
-        self.announceList = self.cleanTorrent[b'announce']
-        return self.announceList
+        """
+        Retrieves a list of all tracker URLs.
+        Prioritizes 'announce-list' (multi-tracker extension).
+        Falls back to 'announce' if list is missing.
+        Returns a flat list of URL strings.
+        """
+        trackers = []
         
+        # 1. Check for the modern 'announce-list'
+        if b'announce-list' in self.cleanTorrent:
+            raw_list = self.cleanTorrent[b'announce-list']
+            # It's a list of lists: [[url1], [url2, url3]]
+            for tier in raw_list:
+                for url in tier:
+                    if isinstance(url, bytes):
+                        trackers.append(url.decode('utf-8'))
+                    else:
+                        trackers.append(url)
+        
+        # 2. Check for the mandatory 'announce' string
+        if b'announce' in self.cleanTorrent:
+            url = self.cleanTorrent[b'announce']
+            if isinstance(url, bytes):
+                url = url.decode('utf-8')
+            
+            # Add it if it's not already there (avoid duplicates)
+            if url not in trackers:
+                trackers.append(url)
+                
+        print(f"Found {len(trackers)} trackers.")
+        self.announceList = trackers
+        return self.announceList
+    
+    
 #-------------------
