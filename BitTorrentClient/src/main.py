@@ -3,95 +3,140 @@ from tracker import Tracker
 from torrent import Torrent
 from session import Session
 from peer2peer import PeerConnection
-import pprint
+from piece_manager import PieceManager
+from server import Server 
+import time
+import threading
 
 """
 MADE BY SATYA PALADUGU
-Refined for Architecture: The Controller Pattern (Step 6 Implementation)
+Main Entry Point.
+Updated for MULTIPLE TORRENTS support.
 """
 
-class bitTorrent_client:
-    def __init__(self):
-        # 1. Identity: Who are we?
-        client = client_Info() 
-        self.peerID = client.get_peerID() 
-        self.portNumber = client.get_portNumber()
-        print(f"Client Initialized with Peer ID: {self.peerID} on Port: {self.portNumber}")
-
-    def start_torrent(self):   
-        # NOTE: Ensure this path is correct for your machine
-        file_path = r'BitTorrentClient\sample_torrent\cyberpunk2077.torrent'
-
-        # ----------------------------------------------------
-        # STEP 1: LOAD & PARSE (The Archivist)
-        # ----------------------------------------------------
-        print("\n--- Step 1: Loading Torrent ---")
-        T = Torrent(file_path)
+class TorrentSession(threading.Thread):
+    """
+    Manages a SINGLE torrent download/upload lifecycle.
+    Runs as a thread so Main can handle multiple sessions.
+    """
+    def __init__(self, torrent_path, client_id, port):
+        threading.Thread.__init__(self)
+        self.torrent_path = torrent_path
+        self.client_id = client_id
+        self.port = port
+        self.running = False
+        self.workers = []
         
+    def run(self):
+        self.running = True
+        print(f"--- Starting Session: {self.torrent_path} ---")
+        
+        try:
+            T = Torrent(self.torrent_path)
+            if not T.cleanTorrent: return
+        except Exception as e:
+            print(f"Failed to load torrent: {e}")
+            return
+
         info_hash = T.generate_info_hash()
         total_size = T.calculate_total_size()
         tracker_urls = T.getAnnounceList()
         
-        if not tracker_urls:
-            print("CRITICAL ERROR: No tracker URLs found.")
-            return
+        # Booster Trackers
+        public_trackers = [
+            'udp://tracker.opentrackr.org:1337/announce',
+            'udp://9.rarbg.com:2810/announce',
+            'udp://tracker.openbittorrent.com:80/announce',
+            'http://tracker.openbittorrent.com:80/announce'
+        ]
+        combined_trackers = list(set(tracker_urls + public_trackers))
 
-        # ----------------------------------------------------
-        # STEP 2: INITIALIZE SESSION (The Accountant)
-        # ----------------------------------------------------
-        print("\n--- Step 2: Initializing Session ---")
-        S = Session(self.peerID, self.portNumber, total_size)
+        pm = PieceManager(T) 
 
-        # ----------------------------------------------------
-        # STEP 3: CONTACT TRACKER (The Messenger)
-        # ----------------------------------------------------
-        print("\n--- Step 3: Contacting Trackers ---")
-        Tr = Tracker(tracker_urls)
+        # 1. Start Server for this torrent (Listening on same port? Need logic for sharing port)
+        # For simplicity in this Phase, we assume 1 Server handles all, 
+        # BUT PeerConnection logic needs mapping. 
+        # TRICK: We pass the Server reference to Main, or assume 1 port = 1 torrent for now.
+        # Let's stick to "Client Mode" for multiple torrents to avoid Port Conflicts in this simple version.
+        
+        # 2. Get Peers
+        Tr = Tracker(combined_trackers)
+        S = Session(self.client_id, self.port, total_size)
         
         peers_list, interval = Tr.get_peers(
             info_hash=info_hash,
-            peer_id=self.peerID,
-            port=self.portNumber,
+            peer_id=self.client_id,
+            port=self.port,
             uploaded=S.getUploaded(),
             downloaded=S.getDownloaded(),
             left=S.getLeft()
         )
 
-        # ----------------------------------------------------
-        # STEP 4: PEER CONNECTION (The Handshake)
-        # ----------------------------------------------------
         if peers_list:
-            print(f"\n--- Step 4: Testing Handshake ---")
-            print(f"Found {len(peers_list)} candidate peers.")
-            
-            # Let's try the first 5 peers (many might be offline/NAT'd)
-            # We limit to 5 so we don't hang forever trying 50 dead IPs.
-            for i in range(min(5, len(peers_list))):
+            # 3. Start Workers
+            MAX_PEERS = 20 
+            for i in range(min(MAX_PEERS, len(peers_list))):
+                if not self.running: break
                 target_peer = peers_list[i]
-                ip = target_peer[0]
-                port = target_peer[1]
+                p = PeerConnection(
+                    piece_manager=pm,
+                    info_hash=info_hash,
+                    peer_id=self.client_id,
+                    ip=target_peer[0],
+                    port=target_peer[1]
+                )
+                p.daemon = True
+                p.start() 
+                self.workers.append(p)
                 
-                print(f"\nAttempting to handshake with Peer {i+1}: {ip}:{port}")
-                
-                # Create the Connection Object (One object per peer)
-                peer = PeerConnection(ip, port, info_hash, self.peerID)
-                
-                # 1. TCP Connect
-                if peer.connect():
-                    # 2. BitTorrent Handshake
-                    if peer.perform_handshake():
-                        print(">>> WE ARE OFFICIALLY IN THE SWARM! <<<")
-                        print(">>> (We would start exchanging bitfields here) <<<")
-                        peer.close()
-                        break # Stop after one success for now to celebrate
-                    else:
-                        print("Handshake failed (Protocol mismatch or wrong info_hash).")
-                        peer.close()
-                else:
-                    print("Connection failed (Peer offline or Firewall).")
+            # Keep alive loop for this session
+            while self.running:
+                time.sleep(5)
+                # Check if complete?
         else:
-            print("\n--- FAILURE: No peers found. Cannot proceed. ---")
+            print(f"--- {self.torrent_path}: No peers found. ---")
+
+    def stop(self):
+        self.running = False
+        # Workers are daemons, will die with main process
+
+class bitTorrent_client:
+    def __init__(self):
+        client = client_Info() 
+        self.peerID = client.get_peerID() 
+        self.portNumber = client.get_portNumber()
+        self.sessions = []
+        print(f"Client Initialized. ID: {self.peerID}")
+
+    def add_torrent(self, file_path):
+        """Adds and starts a new torrent session"""
+        session = TorrentSession(file_path, self.peerID, self.portNumber)
+        session.daemon = True
+        session.start()
+        self.sessions.append(session)
+
+    def main_loop(self):
+        try:
+            while True:
+                command = input(">> (add [path] / list / quit): ").strip().split()
+                if not command: continue
+                
+                if command[0] == "add":
+                    if len(command) > 1:
+                        self.add_torrent(command[1])
+                    else:
+                        print("Usage: add <path_to_torrent>")
+                elif command[0] == "list":
+                    print(f"Active Sessions: {len(self.sessions)}")
+                elif command[0] == "quit":
+                    break
+        except KeyboardInterrupt:
+            print("\nShutting down...")
 
 if __name__ == '__main__':
     B = bitTorrent_client()
-    B.start_torrent()
+    # Auto-load the default for testing
+    default_file = r'BitTorrentClient\sample_torrent\deb.torrent'
+    B.add_torrent(default_file)
+    
+    B.main_loop()

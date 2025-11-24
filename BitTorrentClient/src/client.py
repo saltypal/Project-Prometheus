@@ -30,9 +30,10 @@ class client_Info:
         """The bytes you're actually getting are the ASCII codes for the characters '1', '2', '3', etc. 
         These are not truly random bytes. A truly random byte can be any value from 0 to 255 (\x00 to \xff).
         Your method only generates bytes from the small set of numbers that represent digits"""
+        
         otherBytes = bytes(random.randint(0,255) for z in range(12))
         peerID = clientName+otherBytes
-        print(f"Peer ID Generated: {peerID}")
+        print(f"------\n Peer ID Generated: {peerID}\n------")
         return peerID
 
     def generatePortNumber(self):
@@ -41,7 +42,7 @@ class client_Info:
         """
 
         self.portNumber = 6882
-        print(f"Port Number Generated: {self.portNumber}")
+        print(f"------\nPort Number Generated: {self.portNumber}\n------")
 
         return self.portNumber
     

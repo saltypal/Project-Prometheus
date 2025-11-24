@@ -1,8 +1,10 @@
+import random
+import socket
 import requests
 from bencoding import bencodeDecode
 from collections import deque
 import struct
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 """
 MADE BY SATYA PALADUGU AT 30/9/2025 7:55 PM
@@ -30,20 +32,12 @@ you must re-introduce yourself and update your status from scratch
 """
 class Tracker:
     def __init__(self, tracker_urls):
-        """
-        Initialize with a LIST of tracker URLs. The list will contain HTTP and UDP trackers. 
-        We do NOT pass peerID or Session here. This class is just a specialized HTTP client.
-        """
         self.tracker_urls = []
-        
-        # Ensure it's a list
         if isinstance(tracker_urls, list):
             self.tracker_urls = tracker_urls
         else:
-            # If a single string was passed, wrap it in a list
             self.tracker_urls = [tracker_urls]
             
-        # Ensure all are strings
         self.tracker_urls = [
             url.decode('utf-8') if isinstance(url, bytes) else url 
             for url in self.tracker_urls
@@ -53,10 +47,42 @@ class Tracker:
 
     def get_peers(self, info_hash, peer_id, port, uploaded, downloaded, left):
         """
-        The main public method. 
-        Tries every URL in the list until one responds.
+        Scrapes ALL trackers and returns unique peers.
         """
-        # URL encode the binary parameters properly
+        all_peers = set() 
+        final_interval = 1800
+
+        print(f"--- Contacting {len(self.tracker_urls)} trackers ---")
+
+        for url in self.tracker_urls:
+            try:
+                peers = []
+                interval = 1800
+
+                if url.startswith('http'):
+                    peers, interval = self.http_scrape(url, info_hash, peer_id, port, uploaded, downloaded, left)
+                elif url.startswith('udp'):
+                    peers, interval = self.udp_scrape(url, info_hash, peer_id, port, uploaded, downloaded, left)
+                
+                if peers:
+                    for p in peers:
+                        all_peers.add(p)
+                    final_interval = interval
+                    # print(f"✓ {url} -> Found peers.")
+
+            except Exception as e:
+                continue
+
+        unique_peers_list = list(all_peers)
+        
+        if unique_peers_list:
+            print(f"--- Total Unique Peers Found: {len(unique_peers_list)} ---")
+            return unique_peers_list, final_interval
+        else:
+            print("All trackers failed.")
+            return [], 0
+
+    def http_scrape(self, url, info_hash, peer_id, port, uploaded, downloaded, left):
         params = {
             'info_hash': info_hash,
             'peer_id': peer_id,
@@ -65,90 +91,88 @@ class Tracker:
             'downloaded': downloaded,
             'left': left,
             'compact': 1,
-            'event': 'started'
+            'event': 'started',
+            'numwant': 100 
         }
+        headers = {'User-Agent': 'SatyaTorrent/0.1'}
 
-        headers = {
-            'User-Agent': 'SatyaTorrent/0.1'
-        }
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=3) 
+            response.raise_for_status()
+            
+            if response.content.startswith(b'<'): return [], 0
+
+            raw_response = deque(response.content)
+            tracker_response = self.decoder.deBencode_list(raw_response)
+            
+            if b'failure reason' in tracker_response: return [], 0
+                
+            raw_peers = tracker_response[b'peers']
+            interval = tracker_response.get(b'interval', 1800)
+            return self._unpack_peers(raw_peers), interval
+
+        except Exception:
+            return [], 0
+
+    def udp_scrape(self, url, info_hash, peer_id, port, uploaded, downloaded, left):
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        port_num = parsed.port
+        if not port_num: port_num = 80
         
-        # --- THE LOOP LOGIC ---
-        for url in self.tracker_urls:
-            try: 
-                print(f"Contacting Tracker at: {url}")
-                
-                # Timeout set to 5s to fail faster if tracker is hanging
-                response = requests.get(url, params=params, headers=headers, timeout=5)
-                print(f"Response status: {response.status_code}")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(2) 
 
-                response.raise_for_status()
-                
-                print("✓ Tracker responded successfully.")
-                
-                # --- DEBUG PRINT: SHOW ME THE RAW DATA ---
-                print(f"--- RAW RESPONSE FROM {url} ---")
-                print(response.content[:100])  # Print first 100 bytes
-                print("-----------------------------------")
+        try:
+            connection_id = self._udp_send_connect(sock, hostname, port_num)
+            peers, interval = self._udp_send_announce(
+                sock, hostname, port_num, connection_id, 
+                info_hash, peer_id, port, uploaded, downloaded, left
+            )
+            return peers, interval
 
-                # If the first byte is '<', we know it's HTML garbage.
-                if response.content.startswith(b'<'):
-                    print(f"ERROR: Tracker {url} sent HTML instead of Bencode. Likely an error page.")
-                    continue
+        except Exception:
+            return [], 0
+        finally:
+            sock.close()
 
-                # Decode the bencoded response
-                raw_response = deque(response.content)
-                tracker_response = self.decoder.deBencode_list(raw_response)
-                
-                # Check for tracker error messages
-                if b'failure reason' in tracker_response:
-                    error_msg = tracker_response[b'failure reason'].decode('utf-8')
-                    print(f"✗ Tracker {url} refused: {error_msg}")
-                    continue
+    def _udp_send_connect(self, sock, hostname, port):
+        protocol_id = 0x41727101980
+        action = 0
+        transaction_id = random.randint(0, 65535)
+        packet = struct.pack("!QII", protocol_id, action, transaction_id)
+        sock.sendto(packet, (hostname, port))
+        data, addr = sock.recvfrom(2048)
+        
+        if len(data) < 16: raise ValueError("Short response")
+        res_action, res_trans_id, connection_id = struct.unpack("!IIQ", data[:16])
+        if res_trans_id != transaction_id: raise ValueError("ID mismatch")
+        return connection_id
 
-                if b'peers' not in tracker_response:
-                    print(f"✗ Tracker {url} response has no 'peers' key.")
-                    print(f"Available keys: {list(tracker_response.keys())}")
-                    continue
-                    
-                # IF WE ARE HERE, SUCCESS!
-                raw_peers = tracker_response[b'peers']
-                interval = tracker_response.get(b'interval', 1800)
-                
-                print(f"✓ Success with {url}! Interval: {interval}s")
-                peer_list = self._unpack_peers(raw_peers)
-                return peer_list, interval
-
-            except requests.exceptions.RequestException as e:
-                print(f"✗ Network Error contacting {url}: {e}")
-                continue
-            except Exception as e:
-                print(f"✗ Error parsing response from {url}: {e}")
-                import traceback
-                traceback.print_exc()
-                continue
-
-        # If we loop through ALL and find nothing:
-        print("✗ All trackers failed.")
-        return [], 0
-
+    def _udp_send_announce(self, sock, hostname, port, connection_id, info_hash, peer_id, my_port, uploaded, downloaded, left):
+        action = 1
+        transaction_id = random.randint(0, 65535)
+        key = random.randint(0, 65535)
+        
+        packet = struct.pack("!QII20s20sQQQIIIiH",
+            connection_id, action, transaction_id, info_hash, peer_id,
+            downloaded, left, uploaded, 0, 0, key, 100, my_port
+        )
+        sock.sendto(packet, (hostname, port))
+        data, addr = sock.recvfrom(4096)
+        
+        if len(data) < 20: raise ValueError("Short response")
+        res_action, res_trans_id, interval, leechers, seeders = struct.unpack("!IIIII", data[:20])
+        if res_trans_id != transaction_id: raise ValueError("ID mismatch")
+        
+        return self._unpack_peers(data[20:]), interval
 
     def _unpack_peers(self, raw_peers):
-        """
-        INTERNAL HELPER: Deciphers the 6-byte compact peer format.
-        Format: [IP (4 bytes)] [Port (2 bytes)]
-        """
         peers = []
-        if len(raw_peers) % 6 != 0:
-            print(f"Warning: Peer string length ({len(raw_peers)}) is not a multiple of 6.")
-            
         for i in range(0, len(raw_peers), 6):
             chunk = raw_peers[i : i+6]
-            if len(chunk) < 6:
-                break
-                
+            if len(chunk) < 6: break
             ip = ".".join(str(b) for b in chunk[:4])
             port = struct.unpack('>H', chunk[4:])[0]
             peers.append((ip, port))
-            
-        print(f"✓ Found {len(peers)} peers.")
         return peers
