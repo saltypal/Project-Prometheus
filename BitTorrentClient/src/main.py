@@ -4,7 +4,9 @@ from torrent import Torrent
 from session import Session
 from peer2peer import PeerConnection
 from piece_manager import PieceManager
-from server import Server 
+from server import Server
+from dht import DHTNode  
+from lpd import LPD      
 import time
 import threading
 import random
@@ -12,8 +14,11 @@ import random
 """
 MADE BY SATYA PALADUGU
 Main Entry Point.
-Updated with TIT-FOR-TAT Choking Algorithm.
+Updated with DHT, LPD, and Tit-for-Tat Choking.
 """
+
+# CONFIGURATION
+ENABLE_DHT = True # Set to True to join the Distributed Hash Table
 
 class bitTorrent_client:
     def __init__(self):
@@ -50,10 +55,26 @@ class bitTorrent_client:
         print("--- Initializing Brain ---")
         pm = PieceManager(T) 
 
+        # 1. Start Server (Incoming TCP)
         server = Server(self.portNumber, info_hash, self.peerID, pm)
         server.daemon = True 
         server.start()
 
+        # 2. Start DHT Node (UDP) - BEP 5
+        if ENABLE_DHT:
+            dht = DHTNode(self.portNumber, self.peerID)
+            dht.daemon = True
+            dht.start()
+            print("DHT Node: Enabled")
+        else:
+            print("DHT Node: Disabled")
+
+        # 3. Start Local Peer Discovery (Multicast UDP) - BEP 14
+        lpd = LPD(info_hash, self.peerID, self.portNumber)
+        lpd.daemon = True
+        lpd.start()
+
+        # 4. Contact Trackers (Main Discovery)
         print(f"--- Contacting Trackers ({len(combined_trackers)}) ---")
         Tr = Tracker(combined_trackers)
         S = Session(self.peerID, self.portNumber, total_size)
@@ -70,74 +91,83 @@ class bitTorrent_client:
         if peers_list:
             print(f"\n--- Unleashing the Swarm ({len(peers_list)} peers) ---")
             
+            # Track connected peers to avoid duplicates
+            connected_peers = set()
             MAX_PEERS = 40 
-            for i in range(min(MAX_PEERS, len(peers_list))):
-                target_peer = peers_list[i]
-                p = PeerConnection(
-                    piece_manager=pm,
-                    info_hash=info_hash,
-                    peer_id=self.peerID,
-                    ip=target_peer[0],
-                    port=target_peer[1]
-                )
+            
+            # Helper function to add a peer
+            def add_peer(ip, port):
+                if (ip, port) in connected_peers: return
+                if len(self.active_peers) >= MAX_PEERS: return
+                
+                connected_peers.add((ip, port))
+                p = PeerConnection(pm, info_hash, self.peerID, ip=ip, port=port)
                 p.daemon = True
-                p.start() 
+                p.start()
                 self.active_peers.append(p)
+
+            # Initial Peers from Tracker
+            for ip, port in peers_list:
+                add_peer(ip, port)
                 
             print(f"Started {len(self.active_peers)} worker threads.")
             
-            # START CHOKE MANAGER (Tit-for-Tat)
+            # 5. Start Choke Manager (Tit-for-Tat)
             choke_thread = threading.Thread(target=self.choke_manager_loop)
             choke_thread.daemon = True
             choke_thread.start()
             
+            # 6. Main Loop (Periodic Updates)
             try:
                 while True:
-                    time.sleep(2)
+                    time.sleep(5)
+                    
+                    # Check LPD for new local peers
+                    local_peers = lpd.get_new_peers()
+                    if local_peers:
+                        print(f"LPD: Adding {len(local_peers)} local peers to swarm.")
+                        for ip, port in local_peers:
+                            add_peer(ip, port)
+                            
             except KeyboardInterrupt:
                 print("\nShutting down...")
+                
         else:
-            print("\n--- FAILURE: No peers found. ---")
+            print("\n--- FAILURE: No peers found via Trackers. ---")
+            print("Waiting for LPD...")
+            try:
+                while True: time.sleep(1)
+            except: pass
 
     def choke_manager_loop(self):
         """
         The Tit-for-Tat Algorithm.
         Runs every 10 seconds.
-        1. Measure speed of all peers.
-        2. Unchoke Top 4 fastest.
-        3. Optimistically Unchoke 1 random peer.
-        4. Choke everyone else.
         """
         while True:
             time.sleep(10)
             
-            # 1. Filter peers who are INTERESTED in us
             interested_peers = [p for p in self.active_peers if p.peer_interested and p.connected]
             if not interested_peers: continue
 
-            # 2. Sort by Speed (Descending)
-            # Note: This sorts based on how fast they uploaded TO US (Download Speed).
-            # This is standard leech behavior. Seeders sort by Upload Speed.
+            # Sort by Download Speed (Fastest first)
             interested_peers.sort(key=lambda p: p.get_speed(), reverse=True)
             
-            # 3. Pick Top 3 (Regular Unchoke)
+            # Top 3 = Unchoke
             allowed_peers = interested_peers[:3]
             
-            # 4. Optimistic Unchoke (Pick 1 random from the rest)
+            # Optimistic Unchoke (1 random)
             remaining_peers = interested_peers[3:]
             if remaining_peers:
                 optimistic_peer = random.choice(remaining_peers)
                 allowed_peers.append(optimistic_peer)
             
-            # 5. Apply Choke/Unchoke
+            # Apply Logic
             for p in interested_peers:
                 if p in allowed_peers:
                     p.unchoke()
                 else:
                     p.choke()
-            
-            # Debug Stats
-            # print(f"--- Choke Round: Unchoked {len(allowed_peers)} peers ---")
 
 if __name__ == '__main__':
     B = bitTorrent_client()
